@@ -1000,7 +1000,6 @@
         
         <button class="primary" id="savePlan">💾 Save Plan</button>
         <button id="sharePlan">🔗 Share</button>
-        <button id="forceSync" class="success">🔄 Force Sync</button>
         <button id="resetPlan">🔄 Reset</button>
         <button id="printPlan">🖨️ Print</button>
         <button id="exportPlan">📤 Export</button>
@@ -1171,7 +1170,8 @@
         // ========== CONFIGURATION ==========
         const CONFIG = {
             APP_VERSION: '3.0.0',
-            STORAGE_PREFIX: 'cet_',
+            // SINGLE SOURCE OF TRUTH: One key for everything
+            SHARED_STORAGE_KEY: 'course_planner_shared_data',
             DEFAULT_TOTAL_WEEKS: 37
         };
 
@@ -1199,7 +1199,6 @@
                 this.history = [];
                 this.historyIndex = -1;
                 this.isStudentView = false;
-                this.sharedPlanId = null;
                 this.draggedUnit = null;
                 this.draggedMarker = null;
                 this.draggedFromPalette = false;
@@ -1454,161 +1453,135 @@
             }
 
             init() {
+                console.log('Initializing CoursePlanner...');
+                
+                // Set up event listeners immediately
                 this.setupEventListeners();
+                
+                // Load data
                 this.loadInitialData();
-                this.renderEverything();
-                this.hideLoadingScreen();
-                this.setupKeyboardShortcuts();
+                
+                // Check if DOM is ready before rendering
+                if (document.readyState === 'loading') {
+                    console.log('DOM still loading, waiting...');
+                    document.addEventListener('DOMContentLoaded', () => {
+                        this.renderEverything();
+                        this.setupStudentViewIfNeeded();
+                        this.hideLoadingScreen();
+                        this.setupKeyboardShortcuts();
+                        console.log('CoursePlanner initialized after DOM loaded');
+                    });
+                } else {
+                    // DOM is already ready
+                    this.renderEverything();
+                    this.setupStudentViewIfNeeded();
+                    this.hideLoadingScreen();
+                    this.setupKeyboardShortcuts();
+                    console.log('CoursePlanner initialized');
+                }
             }
-
-            loadInitialData() {
+                
+            // ========== CRITICAL FIX: LOAD DATA FROM SINGLE SOURCE ==========
+           loadInitialData() {
                 try {
                     // Check URL for student view
                     const urlParams = new URLSearchParams(window.location.search);
-                    const hasStudentParam = urlParams.has('student') || urlParams.has('view') && urlParams.get('view') === 'student';
-                    this.isStudentView = hasStudentParam;
-                    this.sharedPlanId = urlParams.get('plan') || urlParams.get('shared');
+                    this.isStudentView = urlParams.has('student');
                     
-                    console.log('=== INITIAL LOAD ===');
+                    console.log('=== DATA LOADING START ===');
                     console.log('Student View:', this.isStudentView);
-                    console.log('Plan ID from URL:', this.sharedPlanId);
-
-                    if (this.isStudentView) {
-                        this.setupStudentView();
-                        this.loadSharedPlan();
-                    } else {
-                        // Try to load saved data
-                        const saved = localStorage.getItem(`${CONFIG.STORAGE_PREFIX}autosave`);
-                        if (saved) {
-                            try {
-                                const data = JSON.parse(saved);
-                                if (data.version === CONFIG.APP_VERSION) {
-                                    this.units = data.units || this.defaultUnits;
-                                    this.courseData = data.courseData || this.courseData;
-                                    this.blockedWeeks = data.blockedWeeks || {};
-                                    // Ensure project milestones have IDs
-                                    if (this.courseData.projectMilestones) {
-                                        this.courseData.projectMilestones = this.courseData.projectMilestones.map((milestone, index) => ({
-                                            ...milestone,
-                                            id: milestone.id || `milestone-${index + 1}`
-                                        }));
-                                    }
+                    console.log('Loading from single source:', CONFIG.SHARED_STORAGE_KEY);
+                    
+                    // SINGLE SOURCE OF TRUTH: Always load from the same key
+                    const sharedData = localStorage.getItem(CONFIG.SHARED_STORAGE_KEY);
+                    
+                    if (sharedData) {
+                        console.log('Found shared data in storage');
+                        try {
+                            const data = JSON.parse(sharedData);
+                            
+                            // Validate version
+                            if (data.version === CONFIG.APP_VERSION) {
+                                this.units = data.units || [...this.defaultUnits];
+                                this.courseData = data.courseData || this.courseData;
+                                this.blockedWeeks = data.blockedWeeks || {};
+                                
+                                // Ensure project milestones have IDs
+                                if (this.courseData.projectMilestones) {
+                                    this.courseData.projectMilestones = this.courseData.projectMilestones.map((milestone, index) => ({
+                                        ...milestone,
+                                        id: milestone.id || `milestone-${index + 1}`
+                                    }));
                                 }
-                            } catch (e) {
-                                console.error('Failed to load saved data:', e);
+                                
+                                console.log('✓ Successfully loaded shared data');
+                                console.log('  Units:', this.units.length);
+                                console.log('  Total weeks:', this.courseData.totalWeeks);
+                                console.log('  Last update:', data.lastUpdate || 'unknown');
+                            } else {
+                                console.warn('Version mismatch, using defaults');
                                 this.units = [...this.defaultUnits];
+                                // Don't show toast here - DOM might not be ready
                             }
-                        } else {
+                        } catch (e) {
+                            console.error('Failed to parse shared data:', e);
                             this.units = [...this.defaultUnits];
+                            // Don't show toast here - DOM might not be ready
                         }
+                    } else {
+                        console.log('No shared data found, using defaults');
+                        this.units = [...this.defaultUnits];
+                        // Don't show toast here - DOM might not be ready
                     }
-
+                    
                     this.saveHistory();
+                    
+                    console.log('=== DATA LOADING COMPLETE ===');
+                    
                 } catch (error) {
                     console.error('Error in loadInitialData:', error);
                     this.units = [...this.defaultUnits];
+                    // Don't show toast here - DOM might not be ready
                 }
-            }
+            } 
 
-            setupStudentView() {
-                document.body.classList.remove('editor-view');
-                document.body.classList.add('student-view');
-                
-                // Update UI for student view
-                document.getElementById('courseTitle').textContent = 'Course Schedule - Cert III Conservation & Ecosystem Management';
-                document.getElementById('courseSubtitle').textContent = `Student View - ${this.courseData.totalWeeks}-Week Plan`;
-                document.getElementById('viewModeIndicator').textContent = 'Student View';
-                document.getElementById('courseDescription').textContent = 'Click units for details | Term overviews below';
-                
-                // Update view toggle
-                document.getElementById('viewIcon').textContent = '✏️';
-                document.getElementById('viewLabel').textContent = 'Editor View';
-                
-                // Hide controls and sidebar
-                const controls = document.querySelector('.controls');
-                const legend = document.querySelector('.legend');
-                const sidebar = document.querySelector('.sidebar');
-                
-                if (controls) controls.style.display = 'none';
-                if (legend) legend.style.display = 'none';
-                if (sidebar) sidebar.style.display = 'none';
-            }
-
-            loadSharedPlan() {
+            // ========== CRITICAL FIX: SAVE DATA TO SINGLE SOURCE ==========
+            saveData() {
                 try {
-                    console.log('=== LOADING SHARED PLAN ===');
-                    console.log('Plan ID from URL:', this.sharedPlanId);
+                    const dataToSave = {
+                        version: CONFIG.APP_VERSION,
+                        lastUpdate: new Date().toISOString(),
+                        units: JSON.parse(JSON.stringify(this.units)),
+                        courseData: JSON.parse(JSON.stringify(this.courseData)),
+                        blockedWeeks: JSON.parse(JSON.stringify(this.blockedWeeks))
+                    };
                     
-                    // List all shared plans in localStorage for debugging
-                    const allKeys = Object.keys(localStorage);
-                    const sharedKeys = allKeys.filter(key => key.startsWith(`${CONFIG.STORAGE_PREFIX}shared_`));
-                    console.log('All shared keys in localStorage:', sharedKeys);
+                    // SINGLE SOURCE OF TRUTH: Save to the single key
+                    localStorage.setItem(CONFIG.SHARED_STORAGE_KEY, JSON.stringify(dataToSave));
                     
-                    if (!this.sharedPlanId && sharedKeys.length > 0) {
-                        // Use the first shared plan found
-                        this.sharedPlanId = sharedKeys[0].replace(`${CONFIG.STORAGE_PREFIX}`, '');
-                        console.log('Using first available plan:', this.sharedPlanId);
-                    }
+                    console.log('=== DATA SAVED ===');
+                    console.log('Saved to:', CONFIG.SHARED_STORAGE_KEY);
+                    console.log('Units saved:', dataToSave.units.length);
+                    console.log('Timestamp:', dataToSave.lastUpdate);
                     
-                    if (this.sharedPlanId) {
-                        const storageKey = `${CONFIG.STORAGE_PREFIX}${this.sharedPlanId}`;
-                        console.log('Looking for key:', storageKey);
-                        
-                        const planData = localStorage.getItem(storageKey);
-                        console.log('Found data:', planData ? 'YES' : 'NO');
-                        
-                        if (planData) {
-                            const plan = JSON.parse(planData);
-                            console.log('Parsed plan:', plan);
-                            
-                            if (plan.units && Array.isArray(plan.units)) {
-                                this.units = plan.units;
-                                console.log('Loaded units:', this.units.length);
-                                console.log('Sample units:', this.units.slice(0, 3));
-                            } else {
-                                console.warn('Plan has no valid units array');
-                                this.units = [...this.defaultUnits];
-                            }
-                            
-                            if (plan.courseData) {
-                                this.courseData = plan.courseData;
-                            }
-                            
-                            if (plan.blockedWeeks) {
-                                this.blockedWeeks = plan.blockedWeeks;
-                            }
-                            
-                            if (plan.projectMilestones) {
-                                this.courseData.projectMilestones = plan.projectMilestones;
-                            }
-                            
-                            this.showToast('Shared plan loaded successfully', 'success');
-                        } else {
-                            console.warn('No plan data found for ID:', this.sharedPlanId);
-                            console.warn('Available keys:', allKeys);
-                            this.units = [...this.defaultUnits];
-                            this.showToast('Using default course sequence', 'info');
-                        }
-                    } else {
-                        console.log('No plan ID provided, using default units');
-                        this.units = [...this.defaultUnits];
-                        this.showToast('Using default course sequence', 'info');
-                    }
+                    // Also save as autosave for backward compatibility
+                    localStorage.setItem('cet_autosave', JSON.stringify({
+                        units: this.units,
+                        courseData: this.courseData,
+                        blockedWeeks: this.blockedWeeks,
+                        timestamp: Date.now(),
+                        version: CONFIG.APP_VERSION
+                    }));
                     
-                    console.log('Final units count:', this.units.length);
-                    
-                    // Force render
-                    this.renderEverything();
-                    
+                    return true;
                 } catch (error) {
-                    console.error('Failed to load shared plan:', error);
-                    console.error('Error details:', error.message, error.stack);
-                    this.units = [...this.defaultUnits];
-                    this.showToast('Error loading plan, using default', 'error');
-                    this.renderEverything();
+                    console.error('Failed to save data:', error);
+                    this.showToast('Failed to save data', 'error');
+                    return false;
                 }
             }
 
+            // ========== MODIFIED: Save history with auto-save ==========
             saveHistory() {
                 this.history = this.history.slice(0, this.historyIndex + 1);
                 this.history.push({
@@ -1623,6 +1596,11 @@
                 }
                 
                 this.historyIndex = this.history.length - 1;
+                
+                // AUTO-SAVE: Save to shared storage on every change
+                if (!this.isStudentView) {
+                    this.saveData();
+                }
             }
 
             // ========== RENDERING ==========
@@ -1780,13 +1758,84 @@
                 }
             }
 
+            renderUnitBlock(unit, week, isFirstWeek = false) {
+                const color = this.colorMap[unit.color] || this.colorMap.foundational;
+                const darkColor = this.darkenColor(color, 30);
+                const isStudentView = this.isStudentView;
+                const cursorStyle = isStudentView ? 'cursor: pointer;' : '';
+                
+                return `
+                    <div class="unit-block" data-unit-id="${unit.id}" data-week="${week}"
+                         style="background: ${color}; border-left-color: ${darkColor}; ${cursorStyle}"
+                         draggable="${!isStudentView}">
+                        <div class="unit-code">${unit.code}</div>
+                        ${isFirstWeek ? `<div class="unit-name">${unit.name}</div>` : ''}
+                        ${unit.weeks.length > 1 && isFirstWeek ? 
+                            `<div class="unit-duration">${unit.weeks.length}w</div>` : ''}
+                        ${isStudentView && unit.teacher === 'other' ? 
+                            `<div class="week-summary" style="color: #fd79a8;">Other Teacher</div>` : ''}
+                        ${isStudentView && unit.tags && unit.tags.includes('SEASONAL') ? 
+                            `<div class="week-summary" style="color: #55efc4;">Seasonal Timing</div>` : ''}
+                    </div>
+                `;
+            }
+
+            getUnitsForWeekAndLane(week, laneId, viewMode) {
+                if (viewMode === 'teacher') {
+                    if (laneId === 'main') {
+                        return this.units.filter(unit => 
+                            unit.weeks.includes(week) && unit.teacher === 'main'
+                        );
+                    } else if (laneId === 'other') {
+                        return this.units.filter(unit => 
+                            unit.weeks.includes(week) && unit.teacher === 'other'
+                        );
+                    } else if (laneId === 'project') {
+                        return this.units.filter(unit => 
+                            unit.weeks.includes(week) && 
+                            (unit.code === 'INTEGRATION' || unit.code === 'PROJECT' || unit.tags.includes('PROJECT'))
+                        );
+                    }
+                } else if (viewMode === 'term') {
+                    const termNumber = parseInt(laneId.split('-')[1]);
+                    const term = this.courseData.terms.find(t => t.number === termNumber);
+                    if (term && week >= term.startWeek && week < term.startWeek + term.weeks) {
+                        return this.units.filter(unit => unit.weeks.includes(week));
+                    }
+                    return [];
+                } else {
+                    // Default week view
+                    if (laneId === 'core') {
+                        return this.units.filter(unit => 
+                            unit.weeks.includes(week) && 
+                            unit.teacher === 'main' &&
+                            !unit.tags.includes('APEX') &&
+                            unit.code !== 'INTEGRATION' &&
+                            unit.code !== 'PROJECT'
+                        );
+                    } else if (laneId === 'specialist') {
+                        return this.units.filter(unit => 
+                            unit.weeks.includes(week) && unit.teacher === 'other'
+                        );
+                    } else if (laneId === 'project') {
+                        return this.units.filter(unit => 
+                            unit.weeks.includes(week) && 
+                            (unit.code === 'INTEGRATION' || unit.code === 'PROJECT')
+                        );
+                    } else if (laneId === 'apex') {
+                        return this.units.filter(unit => 
+                            unit.weeks.includes(week) && unit.tags.includes('APEX')
+                        );
+                    }
+                }
+                return [];
+            }
+
             renderProjectMarkers() {
                 const projectLane = document.querySelector('.lane-content[data-lane-id="project"]');
                 if (!projectLane) return;
 
                 const weekWidth = this.isStudentView ? 120 : 150;
-                const laneTop = projectLane.getBoundingClientRect().top;
-                const containerTop = document.getElementById('timelineContent').getBoundingClientRect().top;
                 const laneHeight = projectLane.offsetHeight;
                 
                 // Remove existing markers first
@@ -1875,169 +1924,50 @@
                 }
             }
 
-            getUnitsForWeekAndLane(week, laneId, viewMode) {
-                if (viewMode === 'teacher') {
-                    if (laneId === 'main') {
-                        return this.units.filter(unit => 
-                            unit.weeks.includes(week) && unit.teacher === 'main'
-                        );
-                    } else if (laneId === 'other') {
-                        return this.units.filter(unit => 
-                            unit.weeks.includes(week) && unit.teacher === 'other'
-                        );
-                    } else if (laneId === 'project') {
-                        return this.units.filter(unit => 
-                            unit.weeks.includes(week) && 
-                            (unit.code === 'INTEGRATION' || unit.code === 'PROJECT' || unit.tags.includes('PROJECT'))
-                        );
+            // ========== STUDENT VIEW SETUP ==========
+            setupStudentView() {
+                try {
+                    // Wait for DOM to be ready
+                    if (!document.getElementById('courseTitle')) {
+                        console.warn('DOM not ready yet, retrying in 100ms');
+                        setTimeout(() => this.setupStudentView(), 100);
+                        return;
                     }
-                } else if (viewMode === 'term') {
-                    const termNumber = parseInt(laneId.split('-')[1]);
-                    const term = this.courseData.terms.find(t => t.number === termNumber);
-                    if (term && week >= term.startWeek && week < term.startWeek + term.weeks) {
-                        return this.units.filter(unit => unit.weeks.includes(week));
-                    }
-                    return [];
-                } else {
-                    // Default week view
-                    if (laneId === 'core') {
-                        return this.units.filter(unit => 
-                            unit.weeks.includes(week) && 
-                            unit.teacher === 'main' &&
-                            !unit.tags.includes('APEX') &&
-                            unit.code !== 'INTEGRATION' &&
-                            unit.code !== 'PROJECT'
-                        );
-                    } else if (laneId === 'specialist') {
-                        return this.units.filter(unit => 
-                            unit.weeks.includes(week) && unit.teacher === 'other'
-                        );
-                    } else if (laneId === 'project') {
-                        return this.units.filter(unit => 
-                            unit.weeks.includes(week) && 
-                            (unit.code === 'INTEGRATION' || unit.code === 'PROJECT')
-                        );
-                    } else if (laneId === 'apex') {
-                        return this.units.filter(unit => 
-                            unit.weeks.includes(week) && unit.tags.includes('APEX')
-                        );
-                    }
+                    
+                    document.body.classList.remove('editor-view');
+                    document.body.classList.add('student-view');
+                    
+                    // Update UI for student view - check each element exists
+                    const courseTitle = document.getElementById('courseTitle');
+                    const courseSubtitle = document.getElementById('courseSubtitle');
+                    const viewModeIndicator = document.getElementById('viewModeIndicator');
+                    const courseDescription = document.getElementById('courseDescription');
+                    const viewIcon = document.getElementById('viewIcon');
+                    const viewLabel = document.getElementById('viewLabel');
+                    
+                    if (courseTitle) courseTitle.textContent = 'Course Schedule - Cert III Conservation & Ecosystem Management';
+                    if (courseSubtitle) courseSubtitle.textContent = `Student View - ${this.courseData.totalWeeks}-Week Plan`;
+                    if (viewModeIndicator) viewModeIndicator.textContent = 'Student View';
+                    if (courseDescription) courseDescription.textContent = 'Click units for details | Term overviews below';
+                    
+                    // Update view toggle
+                    if (viewIcon) viewIcon.textContent = '✏️';
+                    if (viewLabel) viewLabel.textContent = 'Editor View';
+                    
+                    console.log('Student view setup complete');
+                } catch (error) {
+                    console.error('Error in setupStudentView:', error);
+                    // Retry after a short delay
+                    setTimeout(() => this.setupStudentView(), 100);
                 }
-                return [];
             }
 
-            renderUnitBlock(unit, week, isFirstWeek = false) {
-                const color = this.colorMap[unit.color] || this.colorMap.foundational;
-                const darkColor = this.darkenColor(color, 30);
-                const isStudentView = this.isStudentView;
-                const cursorStyle = isStudentView ? 'cursor: pointer;' : '';
-                
-                return `
-                    <div class="unit-block" data-unit-id="${unit.id}" data-week="${week}"
-                         style="background: ${color}; border-left-color: ${darkColor}; ${cursorStyle}"
-                         draggable="${!isStudentView}">
-                        <div class="unit-code">${unit.code}</div>
-                        ${isFirstWeek ? `<div class="unit-name">${unit.name}</div>` : ''}
-                        ${unit.weeks.length > 1 && isFirstWeek ? 
-                            `<div class="unit-duration">${unit.weeks.length}w</div>` : ''}
-                        ${isStudentView && unit.teacher === 'other' ? 
-                            `<div class="week-summary" style="color: #fd79a8;">Other Teacher</div>` : ''}
-                        ${isStudentView && unit.tags && unit.tags.includes('SEASONAL') ? 
-                            `<div class="week-summary" style="color: #55efc4;">Seasonal Timing</div>` : ''}
-                    </div>
-                `;
-            }
-
-            // ========== PROJECT MILESTONE MANAGEMENT ==========
-            addProjectMilestone() {
-                const week = prompt('Enter week for new project milestone (1-' + this.courseData.totalWeeks + '):');
-                if (!week) return;
-                
-                const weekNum = parseInt(week);
-                if (isNaN(weekNum) || weekNum < 1 || weekNum > this.courseData.totalWeeks) {
-                    this.showToast('Invalid week number', 'error');
-                    return;
+            // ========== NEW: Safe student view setup ==========
+            setupStudentViewIfNeeded() {
+                if (this.isStudentView) {
+                    console.log('Setting up student view...');
+                    this.setupStudentView();
                 }
-                
-                const label = prompt('Enter milestone label:', 'New Milestone');
-                if (!label) return;
-                
-                this.saveHistory();
-                
-                const newMilestone = {
-                    id: `milestone-${Date.now()}`,
-                    week: weekNum,
-                    label: label
-                };
-                
-                this.courseData.projectMilestones.push(newMilestone);
-                this.renderEverything();
-                this.showToast('Project milestone added', 'success');
-                this.showSyncNotification('Project milestone added');
-                this.updateSharedPlan();
-            }
-
-            moveProjectMilestone(milestoneId, newWeek) {
-                const milestoneIndex = this.courseData.projectMilestones.findIndex(m => m.id === milestoneId);
-                if (milestoneIndex === -1) return;
-                
-                this.saveHistory();
-                
-                this.courseData.projectMilestones[milestoneIndex].week = newWeek;
-                this.renderEverything();
-                this.showToast('Project milestone moved to week ' + newWeek, 'success');
-                this.showSyncNotification('Project milestone moved');
-                this.updateSharedPlan();
-            }
-
-            deleteProjectMilestone(milestoneId) {
-                if (!confirm('Delete this project milestone?')) return;
-                
-                this.saveHistory();
-                
-                this.courseData.projectMilestones = this.courseData.projectMilestones.filter(m => m.id !== milestoneId);
-                this.renderEverything();
-                this.showToast('Project milestone deleted', 'success');
-                this.showSyncNotification('Project milestone deleted');
-                this.updateSharedPlan();
-            }
-
-            clearAllProjectMilestones() {
-                if (!confirm('Clear ALL project milestones?')) return;
-                
-                this.saveHistory();
-                
-                this.courseData.projectMilestones = [];
-                this.renderEverything();
-                this.showToast('All project milestones cleared', 'success');
-                this.showSyncNotification('Project milestones cleared');
-                this.updateSharedPlan();
-            }
-
-            showProjectMilestoneDetails(milestone) {
-                const modal = document.getElementById('unitModal');
-                const modalBody = document.getElementById('modalBody');
-                const modalTitle = document.getElementById('modalTitle');
-
-                modalTitle.textContent = `Project Milestone: ${milestone.label}`;
-                
-                modalBody.innerHTML = `
-                    <div style="margin-bottom: 20px;">
-                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-                            <div style="flex: 1; background: #f8f9fa; padding: 10px; border-radius: 6px;">
-                                <div style="font-size: 12px; color: #636e72;">Week</div>
-                                <div style="font-weight: 600;">Week ${milestone.week}</div>
-                            </div>
-                        </div>
-                        
-                        <button onclick="document.getElementById('unitModal').style.display = 'none'" 
-                                style="width: 100%; padding: 10px; background: #0984e3; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                            Close
-                        </button>
-                    </div>
-                `;
-
-                modal.style.display = 'flex';
             }
 
             // ========== EVENT LISTENERS ==========
@@ -2065,21 +1995,6 @@
                 
                 const sharePlanBtn = document.getElementById('sharePlan');
                 if (sharePlanBtn) sharePlanBtn.addEventListener('click', () => this.sharePlan());
-                
-                const forceSyncBtn = document.getElementById('forceSync');
-                if (forceSyncBtn) forceSyncBtn.addEventListener('click', () => {
-                    this.updateSharedPlan();
-                    this.showToast('Forced sync to student view', 'success');
-                    
-                    // Also regenerate share link with current data
-                    const shareUrl = this.generateShareLink();
-                    const panel = document.getElementById('sharePanel');
-                    const input = document.getElementById('shareLink');
-                    if (panel && input) {
-                        input.value = shareUrl;
-                        panel.classList.add('show');
-                    }
-                });
                 
                 const resetPlanBtn = document.getElementById('resetPlan');
                 if (resetPlanBtn) resetPlanBtn.addEventListener('click', () => this.resetToDefault());
@@ -2173,162 +2088,6 @@
                 });
             }
 
-            // ========== SHARING AND SYNC ==========
-            generateShareLink() {
-                // Use existing shared plan ID if available, otherwise create new
-                let shareId = this.sharedPlanId;
-                
-                if (!shareId) {
-                    // Try to find existing shared plan
-                    const existingKeys = Object.keys(localStorage)
-                        .filter(key => key.startsWith(`${CONFIG.STORAGE_PREFIX}shared_`));
-                    
-                    if (existingKeys.length > 0) {
-                        // Use the first existing shared plan
-                        shareId = existingKeys[0].replace(`${CONFIG.STORAGE_PREFIX}`, '');
-                        console.log('Using existing share ID:', shareId);
-                    } else {
-                        // Create new
-                        shareId = `shared_${Date.now()}`;
-                        console.log('Creating new share ID:', shareId);
-                    }
-                }
-                
-                const shareData = {
-                    id: shareId,
-                    name: 'Shared Student View',
-                    date: new Date().toISOString(),
-                    units: JSON.parse(JSON.stringify(this.units)),
-                    courseData: JSON.parse(JSON.stringify(this.courseData)),
-                    blockedWeeks: JSON.parse(JSON.stringify(this.blockedWeeks)),
-                    projectMilestones: JSON.parse(JSON.stringify(this.courseData.projectMilestones)),
-                    lastUpdate: new Date().toISOString(),
-                    version: CONFIG.APP_VERSION
-                };
-
-                // SAVE to localStorage with the CORRECT key
-                localStorage.setItem(`${CONFIG.STORAGE_PREFIX}${shareId}`, JSON.stringify(shareData));
-                console.log('Saved shared plan with ID:', shareId, 'Data:', shareData);
-
-                const baseUrl = window.location.origin + window.location.pathname;
-                const shareUrl = `${baseUrl}?student=true&plan=${shareId}`;
-                
-                return shareUrl;
-            }
-
-            updateSharedPlan() {
-                try {
-                    console.log('Updating shared plans...');
-                    
-                    // Get ALL shared plan keys
-                    const sharedKeys = Object.keys(localStorage)
-                        .filter(key => key.startsWith(`${CONFIG.STORAGE_PREFIX}shared_`));
-                    
-                    console.log('Found shared keys:', sharedKeys);
-                    
-                    if (sharedKeys.length === 0) {
-                        // Create a new shared plan if none exists
-                        const shareId = `shared_${Date.now()}`;
-                        console.log('No shared plans found, creating new one:', shareId);
-                        this.generateShareLink();
-                        return;
-                    }
-                    
-                    // Update EVERY shared plan with current state
-                    sharedKeys.forEach(key => {
-                        let data;
-                        try {
-                            data = JSON.parse(localStorage.getItem(key)) || {};
-                        } catch (e) {
-                            data = {};
-                        }
-                        
-                        // ALWAYS update, even if data structure is incomplete
-                        data.units = JSON.parse(JSON.stringify(this.units));
-                        data.courseData = JSON.parse(JSON.stringify(this.courseData));
-                        data.blockedWeeks = JSON.parse(JSON.stringify(this.blockedWeeks));
-                        data.projectMilestones = JSON.parse(JSON.stringify(this.courseData.projectMilestones));
-                        data.lastUpdate = new Date().toISOString();
-                        data.version = CONFIG.APP_VERSION;
-                        
-                        localStorage.setItem(key, JSON.stringify(data));
-                        console.log('Updated shared plan:', key);
-                    });
-                    
-                    // Also save an autosave
-                    localStorage.setItem(`${CONFIG.STORAGE_PREFIX}autosave`, JSON.stringify({
-                        units: this.units,
-                        courseData: this.courseData,
-                        blockedWeeks: this.blockedWeeks,
-                        projectMilestones: this.courseData.projectMilestones,
-                        timestamp: Date.now(),
-                        version: CONFIG.APP_VERSION
-                    }));
-                    
-                    this.showSyncNotification('Changes saved to student view');
-                    
-                } catch (error) {
-                    console.error('Failed to update shared plans:', error);
-                }
-            }
-
-            sharePlan() {
-                if (this.isStudentView) return;
-                
-                // First, update the shared plan with current data
-                this.updateSharedPlan();
-                
-                // Then generate and show the share link
-                const shareUrl = this.generateShareLink();
-                
-                // Show share panel
-                const panel = document.getElementById('sharePanel');
-                const input = document.getElementById('shareLink');
-                const copyBtn = document.getElementById('copyShareLink');
-                const qrContainer = document.getElementById('qrCode');
-                
-                input.value = shareUrl;
-                panel.classList.add('show');
-                
-                // Generate QR code
-                qrContainer.innerHTML = `
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}" 
-                         alt="QR Code" style="border: 1px solid #ddd; border-radius: 6px;">
-                    <div style="font-size: 12px; margin-top: 10px; color: #636e72;">
-                        <div style="margin-bottom: 5px;">Students will see:</div>
-                        <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 11px;">
-                            • Simplified timeline view<br>
-                            • Term overviews<br>
-                            • Unit details on click<br>
-                            • No editing controls<br>
-                            • Updated automatically
-                        </div>
-                        <button onclick="window.open('${shareUrl}', '_blank')" 
-                                style="width: 100%; margin-top: 10px; padding: 8px; background: #0984e3; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            Open Student View in New Tab
-                        </button>
-                    </div>
-                `;
-                
-                copyBtn.onclick = () => {
-                    input.select();
-                    input.setSelectionRange(0, 99999);
-                    document.execCommand('copy');
-                    this.showToast('Link copied to clipboard!', 'success');
-                };
-            }
-
-            toggleViewMode() {
-                if (this.isStudentView) {
-                    // Switch to editor view
-                    window.location.href = window.location.pathname;
-                } else {
-                    // Show preview of student view in the share panel
-                    this.sharePlan();
-                }
-            }
-
-            // ========== UNIT MANAGEMENT ==========
             setupTimelineEvents() {
                 const container = document.getElementById('timelineContent');
                 if (!container) return;
@@ -2408,6 +2167,7 @@
                 }
             }
 
+            // ========== UNIT OPERATIONS ==========
             moveUnit(unitId, week, lane) {
                 const unitIndex = this.units.findIndex(u => u.id === unitId);
                 if (unitIndex === -1) return;
@@ -2430,47 +2190,6 @@
 
                 this.renderEverything();
                 this.showSyncNotification('Unit moved');
-                this.updateSharedPlan();
-            }
-
-            renderUnitPalette() {
-                // Your existing renderUnitPalette method
-                if (this.isStudentView) return;
-                
-                const container = document.getElementById('unitPalette');
-                if (!container) return;
-
-                container.innerHTML = this.unitTemplates.map(template => `
-                    <div class="unit-item" draggable="true" data-template='${JSON.stringify(template)}'
-                         style="border-left: 4px solid ${this.colorMap[template.color]};">
-                        <div class="unit-code">${template.code}</div>
-                        <div class="unit-name">${template.name}</div>
-                        <div style="display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap;">
-                            ${template.tags.map(tag => `
-                                <span style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #e9ecef; color: #495057;">
-                                    ${tag}
-                                </span>
-                            `).join('')}
-                        </div>
-                    </div>
-                `).join('');
-
-                // Add drag event listeners
-                container.querySelectorAll('.unit-item').forEach(item => {
-                    item.addEventListener('dragstart', (e) => {
-                        const template = JSON.parse(e.currentTarget.dataset.template);
-                        this.draggedFromPalette = true;
-                        this.draggedUnit = template;
-                        e.dataTransfer.setData('text/plain', JSON.stringify(template));
-                        e.currentTarget.classList.add('dragging');
-                    });
-
-                    item.addEventListener('dragend', (e) => {
-                        e.currentTarget.classList.remove('dragging');
-                        this.draggedFromPalette = false;
-                        this.draggedUnit = null;
-                    });
-                });
             }
 
             addUnitFromTemplate(template, week, lane) {
@@ -2491,7 +2210,6 @@
                 this.units.push(newUnit);
                 this.renderEverything();
                 this.showSyncNotification('Unit added');
-                this.updateSharedPlan();
                 
                 // Open modal to edit the new unit
                 if (!this.isStudentView) {
@@ -2499,6 +2217,95 @@
                 }
             }
 
+            // ========== PROJECT MILESTONE OPERATIONS ==========
+            addProjectMilestone() {
+                const week = prompt('Enter week for new project milestone (1-' + this.courseData.totalWeeks + '):');
+                if (!week) return;
+                
+                const weekNum = parseInt(week);
+                if (isNaN(weekNum) || weekNum < 1 || weekNum > this.courseData.totalWeeks) {
+                    this.showToast('Invalid week number', 'error');
+                    return;
+                }
+                
+                const label = prompt('Enter milestone label:', 'New Milestone');
+                if (!label) return;
+                
+                this.saveHistory();
+                
+                const newMilestone = {
+                    id: `milestone-${Date.now()}`,
+                    week: weekNum,
+                    label: label
+                };
+                
+                this.courseData.projectMilestones.push(newMilestone);
+                this.renderEverything();
+                this.showToast('Project milestone added', 'success');
+                this.showSyncNotification('Project milestone added');
+            }
+
+            moveProjectMilestone(milestoneId, newWeek) {
+                const milestoneIndex = this.courseData.projectMilestones.findIndex(m => m.id === milestoneId);
+                if (milestoneIndex === -1) return;
+                
+                this.saveHistory();
+                
+                this.courseData.projectMilestones[milestoneIndex].week = newWeek;
+                this.renderEverything();
+                this.showToast('Project milestone moved to week ' + newWeek, 'success');
+                this.showSyncNotification('Project milestone moved');
+            }
+
+            deleteProjectMilestone(milestoneId) {
+                if (!confirm('Delete this project milestone?')) return;
+                
+                this.saveHistory();
+                
+                this.courseData.projectMilestones = this.courseData.projectMilestones.filter(m => m.id !== milestoneId);
+                this.renderEverything();
+                this.showToast('Project milestone deleted', 'success');
+                this.showSyncNotification('Project milestone deleted');
+            }
+
+            clearAllProjectMilestones() {
+                if (!confirm('Clear ALL project milestones?')) return;
+                
+                this.saveHistory();
+                
+                this.courseData.projectMilestones = [];
+                this.renderEverything();
+                this.showToast('All project milestones cleared', 'success');
+                this.showSyncNotification('Project milestones cleared');
+            }
+
+            showProjectMilestoneDetails(milestone) {
+                const modal = document.getElementById('unitModal');
+                const modalBody = document.getElementById('modalBody');
+                const modalTitle = document.getElementById('modalTitle');
+
+                modalTitle.textContent = `Project Milestone: ${milestone.label}`;
+                
+                modalBody.innerHTML = `
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div style="flex: 1; background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                                <div style="font-size: 12px; color: #636e72;">Week</div>
+                                <div style="font-weight: 600;">Week ${milestone.week}</div>
+                            </div>
+                        </div>
+                        
+                        <button onclick="document.getElementById('unitModal').style.display = 'none'" 
+                                style="width: 100%; padding: 10px; background: #0984e3; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            Close
+                        </button>
+                    </div>
+                `;
+
+                modal.style.display = 'flex';
+            }
+
+            // ========== MODAL OPERATIONS ==========
             openUnitModal(unitId) {
                 if (this.isStudentView) return;
                 
@@ -2562,8 +2369,8 @@
                         </div>
                         
                         <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="primary" onclick="app.saveUnitChanges('${unitId}')" style="flex: 1;">Save Changes</button>
-                            <button class="warning" onclick="app.deleteUnit('${unitId}')" style="flex: 1;">Delete Unit</button>
+                            <button class="primary" onclick="window.app.saveUnitChanges('${unitId}')" style="flex: 1;">Save Changes</button>
+                            <button class="warning" onclick="window.app.deleteUnit('${unitId}')" style="flex: 1;">Delete Unit</button>
                             <button onclick="document.getElementById('unitModal').style.display = 'none'" style="flex: 1;">Cancel</button>
                         </div>
                     </div>
@@ -2597,7 +2404,6 @@
                 this.renderEverything();
                 this.showToast('Unit updated successfully', 'success');
                 this.showSyncNotification('Unit updated');
-                this.updateSharedPlan();
             }
 
             parseWeeksInput(input) {
@@ -2624,7 +2430,6 @@
                     this.renderEverything();
                     this.showToast('Unit deleted', 'success');
                     this.showSyncNotification('Unit deleted');
-                    this.updateSharedPlan();
                 }
             }
 
@@ -2733,7 +2538,47 @@
                 modal.style.display = 'flex';
             }
 
-            // ========== PLAN MANAGEMENT ==========
+            // ========== UNIT PALETTE ==========
+            renderUnitPalette() {
+                if (this.isStudentView) return;
+                
+                const container = document.getElementById('unitPalette');
+                if (!container) return;
+
+                container.innerHTML = this.unitTemplates.map(template => `
+                    <div class="unit-item" draggable="true" data-template='${JSON.stringify(template)}'
+                         style="border-left: 4px solid ${this.colorMap[template.color]};">
+                        <div class="unit-code">${template.code}</div>
+                        <div class="unit-name">${template.name}</div>
+                        <div style="display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap;">
+                            ${template.tags.map(tag => `
+                                <span style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #e9ecef; color: #495057;">
+                                    ${tag}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('');
+
+                // Add drag event listeners
+                container.querySelectorAll('.unit-item').forEach(item => {
+                    item.addEventListener('dragstart', (e) => {
+                        const template = JSON.parse(e.currentTarget.dataset.template);
+                        this.draggedFromPalette = true;
+                        this.draggedUnit = template;
+                        e.dataTransfer.setData('text/plain', JSON.stringify(template));
+                        e.currentTarget.classList.add('dragging');
+                    });
+
+                    item.addEventListener('dragend', (e) => {
+                        e.currentTarget.classList.remove('dragging');
+                        this.draggedFromPalette = false;
+                        this.draggedUnit = null;
+                    });
+                });
+            }
+
+            // ========== SAVED PLANS ==========
             renderSavedPlans() {
                 if (this.isStudentView) return;
                 
@@ -2741,7 +2586,7 @@
                 if (!container) return;
 
                 try {
-                    const savedPlans = JSON.parse(localStorage.getItem(`${CONFIG.STORAGE_PREFIX}plans`) || '[]');
+                    const savedPlans = JSON.parse(localStorage.getItem('cet_plans') || '[]');
                     
                     if (savedPlans.length === 0) {
                         container.innerHTML = '<p style="color: #666; font-size: 14px;">No saved plans yet.</p>';
@@ -2755,11 +2600,11 @@
                                 ${new Date(plan.date).toLocaleDateString()} • ${plan.units?.length || 0} units
                             </div>
                             <div style="display: flex; gap: 5px;">
-                                <button onclick="app.loadPlan('${plan.id}')" 
+                                <button onclick="window.app.loadPlan('${plan.id}')" 
                                         style="flex: 1; padding: 5px; font-size: 12px; background: #0984e3; color: white; border: none; border-radius: 4px; cursor: pointer;">
                                     Load
                                 </button>
-                                <button onclick="app.deleteSavedPlan('${plan.id}')" 
+                                <button onclick="window.app.deleteSavedPlan('${plan.id}')" 
                                         style="flex: 1; padding: 5px; font-size: 12px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer;">
                                     Delete
                                 </button>
@@ -2785,24 +2630,13 @@
                     units: this.units,
                     courseData: this.courseData,
                     blockedWeeks: this.blockedWeeks,
-                    projectMilestones: this.courseData.projectMilestones,
                     version: CONFIG.APP_VERSION
                 };
 
                 try {
-                    let savedPlans = JSON.parse(localStorage.getItem(`${CONFIG.STORAGE_PREFIX}plans`) || '[]');
+                    let savedPlans = JSON.parse(localStorage.getItem('cet_plans') || '[]');
                     savedPlans.push(plan);
-                    localStorage.setItem(`${CONFIG.STORAGE_PREFIX}plans`, JSON.stringify(savedPlans));
-                    
-                    // Also save as autosave
-                    localStorage.setItem(`${CONFIG.STORAGE_PREFIX}autosave`, JSON.stringify({
-                        units: this.units,
-                        courseData: this.courseData,
-                        blockedWeeks: this.blockedWeeks,
-                        projectMilestones: this.courseData.projectMilestones,
-                        timestamp: Date.now(),
-                        version: CONFIG.APP_VERSION
-                    }));
+                    localStorage.setItem('cet_plans', JSON.stringify(savedPlans));
                     
                     this.showToast(`Plan "${planName}" saved!`, 'success');
                     this.renderSavedPlans();
@@ -2815,7 +2649,7 @@
 
             loadPlan(planId) {
                 try {
-                    const savedPlans = JSON.parse(localStorage.getItem(`${CONFIG.STORAGE_PREFIX}plans`) || '[]');
+                    const savedPlans = JSON.parse(localStorage.getItem('cet_plans') || '[]');
                     const plan = savedPlans.find(p => p.id === planId);
                     
                     if (plan) {
@@ -2823,11 +2657,9 @@
                         this.units = plan.units || [];
                         this.courseData = plan.courseData || this.courseData;
                         this.blockedWeeks = plan.blockedWeeks || {};
-                        this.courseData.projectMilestones = plan.projectMilestones || this.courseData.projectMilestones;
                         this.renderEverything();
                         this.showToast(`Loaded "${plan.name}"`, 'success');
                         this.showSyncNotification('Plan loaded');
-                        this.updateSharedPlan();
                     }
                 } catch (error) {
                     console.error('Failed to load plan:', error);
@@ -2838,9 +2670,9 @@
             deleteSavedPlan(planId) {
                 if (confirm('Delete this saved plan?')) {
                     try {
-                        let savedPlans = JSON.parse(localStorage.getItem(`${CONFIG.STORAGE_PREFIX}plans`) || '[]');
+                        let savedPlans = JSON.parse(localStorage.getItem('cet_plans') || '[]');
                         savedPlans = savedPlans.filter(p => p.id !== planId);
-                        localStorage.setItem(`${CONFIG.STORAGE_PREFIX}plans`, JSON.stringify(savedPlans));
+                        localStorage.setItem('cet_plans', JSON.stringify(savedPlans));
                         this.renderSavedPlans();
                         this.showToast('Plan deleted', 'success');
                     } catch (error) {
@@ -2850,6 +2682,78 @@
                 }
             }
 
+            // ========== SHARING ==========
+            generateShareLink() {
+                // First, ensure data is saved
+                this.saveData();
+                
+                // Generate simple share URL - no complex IDs needed
+                const baseUrl = window.location.origin + window.location.pathname;
+                const shareUrl = `${baseUrl}?student=true`;
+                
+                console.log('Generated share link:', shareUrl);
+                console.log('Data ready for sharing:', {
+                    units: this.units.length,
+                    weeks: this.courseData.totalWeeks,
+                    timestamp: new Date().toISOString()
+                });
+                
+                return shareUrl;
+            }
+
+            sharePlan() {
+                if (this.isStudentView) return;
+                
+                const shareUrl = this.generateShareLink();
+                
+                // Show share panel
+                const panel = document.getElementById('sharePanel');
+                const input = document.getElementById('shareLink');
+                const copyBtn = document.getElementById('copyShareLink');
+                const qrContainer = document.getElementById('qrCode');
+                
+                input.value = shareUrl;
+                panel.classList.add('show');
+                
+                // Generate QR code
+                qrContainer.innerHTML = `
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}" 
+                         alt="QR Code" style="border: 1px solid #ddd; border-radius: 6px;">
+                    <div style="font-size: 12px; margin-top: 10px; color: #636e72;">
+                        <div style="margin-bottom: 5px;">Students will see:</div>
+                        <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 11px;">
+                            • Simplified timeline view<br>
+                            • Term overviews<br>
+                            • Unit details on click<br>
+                            • No editing controls<br>
+                            • Updated automatically
+                        </div>
+                        <button onclick="window.open('${shareUrl}', '_blank')" 
+                                style="width: 100%; margin-top: 10px; padding: 8px; background: #0984e3; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Open Student View in New Tab
+                        </button>
+                    </div>
+                `;
+                
+                copyBtn.onclick = () => {
+                    input.select();
+                    input.setSelectionRange(0, 99999);
+                    document.execCommand('copy');
+                    this.showToast('Link copied to clipboard!', 'success');
+                };
+            }
+
+            toggleViewMode() {
+                if (this.isStudentView) {
+                    // Switch to editor view
+                    window.location.href = window.location.pathname;
+                } else {
+                    // Show preview of student view in the share panel
+                    this.sharePlan();
+                }
+            }
+
+            // ========== RESET OPERATIONS ==========
             resetToDefault() {
                 if (confirm('Reset to default course sequence? Any unsaved changes will be lost.')) {
                     this.saveHistory();
@@ -2863,10 +2767,10 @@
                             { number: 4, weeks: 7, startWeek: 31, name: "Apex & Finalisation" }
                         ],
                         projectMilestones: [
-                            { id: 'milestone-1', week: 18, label: "Project Start" },
-                            { id: 'milestone-2', week: 25, label: "Phase 2" },
-                            { id: 'milestone-3', week: 30, label: "Integration" },
-                            { id: 'milestone-4', week: 34, label: "Final Phase" }
+                            { week: 18, label: "Project Start" },
+                            { week: 25, label: "Phase 2" },
+                            { week: 30, label: "Integration" },
+                            { week: 34, label: "Final Phase" }
                         ]
                     };
                     this.blockedWeeks = {};
@@ -2874,7 +2778,6 @@
                     this.renderEverything();
                     this.showToast('Reset to default sequence', 'success');
                     this.showSyncNotification('Reset to default');
-                    this.updateSharedPlan();
                 }
             }
 
@@ -2885,7 +2788,6 @@
                     this.renderEverything();
                     this.showToast('Timetable cleared', 'success');
                     this.showSyncNotification('Timetable cleared');
-                    this.updateSharedPlan();
                 }
             }
 
@@ -2935,7 +2837,6 @@
                 this.renderEverything();
                 this.showToast(`Week blocking applied to weeks ${weeks.join(', ')}`, 'success');
                 this.showSyncNotification('Week blocking applied');
-                this.updateSharedPlan();
             }
 
             // ========== WEEK MANAGEMENT ==========
@@ -2989,7 +2890,6 @@
                 this.renderEverything();
                 this.showToast('Week added', 'success');
                 this.showSyncNotification('Week added');
-                this.updateSharedPlan();
             }
 
             removeWeek() {
@@ -3038,7 +2938,6 @@
                 this.renderEverything();
                 this.showToast('Week removed', 'success');
                 this.showSyncNotification('Week removed');
-                this.updateSharedPlan();
             }
 
             addWeekToTerm() {
@@ -3071,7 +2970,6 @@
                 this.renderEverything();
                 this.showToast(`Week added to Term ${termNumber}`, 'success');
                 this.showSyncNotification('Week added to term');
-                this.updateSharedPlan();
             }
 
             removeWeekFromTerm() {
@@ -3115,7 +3013,6 @@
                 this.renderEverything();
                 this.showToast(`Week removed from Term ${termNumber}`, 'success');
                 this.showSyncNotification('Week removed from term');
-                this.updateSharedPlan();
             }
 
             adjustUnitsForWeekInsertion(insertPosition, count) {
@@ -3192,8 +3089,7 @@
                     timestamp: new Date().toISOString(),
                     units: this.units,
                     courseData: this.courseData,
-                    blockedWeeks: this.blockedWeeks,
-                    projectMilestones: this.courseData.projectMilestones
+                    blockedWeeks: this.blockedWeeks
                 };
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -3226,11 +3122,9 @@
                             this.units = data.units;
                             this.courseData = data.courseData;
                             this.blockedWeeks = data.blockedWeeks || {};
-                            this.courseData.projectMilestones = data.projectMilestones || this.courseData.projectMilestones;
                             this.renderEverything();
                             this.showToast('Plan imported successfully', 'success');
                             this.showSyncNotification('Plan imported');
-                            this.updateSharedPlan();
                         } else {
                             this.showToast('Invalid plan file', 'error');
                         }
@@ -3249,36 +3143,6 @@
             }
 
             // ========== UTILITIES ==========
-            undo() {
-                if (this.historyIndex > 0) {
-                    this.historyIndex--;
-                    const state = this.history[this.historyIndex];
-                    this.units = JSON.parse(JSON.stringify(state.units));
-                    this.courseData = JSON.parse(JSON.stringify(state.courseData));
-                    this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
-                    this.renderEverything();
-                    this.showToast('Undo', 'success');
-                    this.updateSharedPlan();
-                    return true;
-                }
-                return false;
-            }
-
-            redo() {
-                if (this.historyIndex < this.history.length - 1) {
-                    this.historyIndex++;
-                    const state = this.history[this.historyIndex];
-                    this.units = JSON.parse(JSON.stringify(state.units));
-                    this.courseData = JSON.parse(JSON.stringify(state.courseData));
-                    this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
-                    this.renderEverything();
-                    this.showToast('Redo', 'success');
-                    this.updateSharedPlan();
-                    return true;
-                }
-                return false;
-            }
-
             getTermForWeek(week) {
                 return this.courseData.terms.find(term => 
                     week >= term.startWeek && week < term.startWeek + term.weeks
@@ -3293,26 +3157,39 @@
             }
 
             showToast(message, type = 'info') {
-                const container = document.getElementById('toastsContainer');
-                if (!container) return;
+                try {
+                    // Check if toast container exists, create it if not
+                    let container = document.getElementById('toastsContainer');
+                    if (!container) {
+                        container = document.createElement('div');
+                        container.id = 'toastsContainer';
+                        document.body.appendChild(container);
+                    }
 
-                const toast = document.createElement('div');
-                toast.className = `toast toast-${type}`;
-                toast.textContent = message;
-                container.appendChild(toast);
+                    const toast = document.createElement('div');
+                    toast.className = `toast toast-${type}`;
+                    toast.textContent = message;
+                    container.appendChild(toast);
 
-                setTimeout(() => {
-                    toast.style.opacity = '0';
-                    toast.style.transform = 'translateX(100%)';
-                    setTimeout(() => toast.remove(), 300);
-                }, 3000);
+                    setTimeout(() => {
+                        toast.style.opacity = '0';
+                        toast.style.transform = 'translateX(100%)';
+                        setTimeout(() => {
+                            if (toast.parentNode) {
+                                toast.remove();
+                            }
+                        }, 300);
+                    }, 3000);
+                } catch (error) {
+                    console.error('Failed to show toast:', error);
+                }
             }
 
             showSyncNotification(message) {
                 const status = document.getElementById('syncStatus');
                 const messageEl = document.getElementById('syncMessage');
                 if (status && messageEl) {
-                    messageEl.textContent = message;
+                    messageEl.textContent = message + ' (synced to student view)';
                     status.classList.add('show');
                     
                     setTimeout(() => {
@@ -3322,12 +3199,18 @@
             }
 
             hideLoadingScreen() {
-                const loading = document.getElementById('loading');
-                if (loading) {
-                    loading.style.opacity = '0';
-                    setTimeout(() => {
-                        loading.style.display = 'none';
-                    }, 300);
+                try {
+                    const loading = document.getElementById('loading');
+                    if (loading) {
+                        loading.style.opacity = '0';
+                        setTimeout(() => {
+                            if (loading.parentNode) {
+                                loading.style.display = 'none';
+                            }
+                        }, 300);
+                    }
+                } catch (error) {
+                    console.error('Error hiding loading screen:', error);
                 }
             }
 
@@ -3345,6 +3228,7 @@
                 ).toString(16).slice(1);
             }
 
+            // ========== KEYBOARD SHORTCUTS ==========
             setupKeyboardShortcuts() {
                 document.addEventListener('keydown', (e) => {
                     if (e.target.matches('input, textarea, select')) return;
@@ -3389,13 +3273,96 @@
                     }
                 });
             }
+
+            undo() {
+                if (this.historyIndex > 0) {
+                    this.historyIndex--;
+                    const state = this.history[this.historyIndex];
+                    this.units = JSON.parse(JSON.stringify(state.units));
+                    this.courseData = JSON.parse(JSON.stringify(state.courseData));
+                    this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
+                    this.renderEverything();
+                    this.showToast('Undo', 'success');
+                    return true;
+                }
+                return false;
+            }
+
+            redo() {
+                if (this.historyIndex < this.history.length - 1) {
+                    this.historyIndex++;
+                    const state = this.history[this.historyIndex];
+                    this.units = JSON.parse(JSON.stringify(state.units));
+                    this.courseData = JSON.parse(JSON.stringify(state.courseData));
+                    this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
+                    this.renderEverything();
+                    this.showToast('Redo', 'success');
+                    return true;
+                }
+                return false;
+            }
+
+            // ========== DEBUG METHODS ==========
+            verifyDataSync() {
+                const sharedData = localStorage.getItem(CONFIG.SHARED_STORAGE_KEY);
+                if (!sharedData) {
+                    console.warn('No shared data found in storage');
+                    return false;
+                }
+                
+                try {
+                    const data = JSON.parse(sharedData);
+                    console.log('=== DATA VERIFICATION ===');
+                    console.log('Storage key:', CONFIG.SHARED_STORAGE_KEY);
+                    console.log('Data version:', data.version);
+                    console.log('Last update:', data.lastUpdate);
+                    console.log('Units in storage:', data.units?.length || 0);
+                    console.log('Units in memory:', this.units.length);
+                    console.log('Match:', data.units?.length === this.units.length);
+                    return true;
+                } catch (error) {
+                    console.error('Data verification failed:', error);
+                    return false;
+                }
+            }
         }
 
         // ========== INITIALIZE APP ==========
         let app;
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, initializing app...');
+            
+            // Create the app instance
             app = new CoursePlanner();
-            window.app = app; // Make available globally
+            window.app = app;
+            
+            // Add debug button for testing (only in editor view)
+            setTimeout(() => {
+                if (app && !app.isStudentView) {
+                    const debugBtn = document.createElement('button');
+                    debugBtn.textContent = '🔍 Verify Sync';
+                    debugBtn.style.cssText = `
+                        position: fixed;
+                        bottom: 70px;
+                        right: 20px;
+                        padding: 10px 15px;
+                        background: #2d3436;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        cursor: pointer;
+                        z-index: 1000;
+                        font-size: 14px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                    `;
+                    debugBtn.onclick = () => {
+                        console.log('=== DEBUG SYNC STATUS ===');
+                        const isSynced = app.verifyDataSync();
+                        alert(isSynced ? '✓ Data is synchronized!' : '✗ Data sync issue - check console');
+                    };
+                    document.body.appendChild(debugBtn);
+                }
+            }, 500); // Wait a bit for everything to settle
         });
     </script>
 </body>
