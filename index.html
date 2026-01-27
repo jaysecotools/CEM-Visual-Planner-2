@@ -1000,6 +1000,7 @@
         
         <button class="primary" id="savePlan">💾 Save Plan</button>
         <button id="sharePlan">🔗 Share</button>
+        <button id="forceSync" class="success">🔄 Force Sync</button>
         <button id="resetPlan">🔄 Reset</button>
         <button id="printPlan">🖨️ Print</button>
         <button id="exportPlan">📤 Export</button>
@@ -1468,7 +1469,9 @@
                     this.isStudentView = hasStudentParam;
                     this.sharedPlanId = urlParams.get('plan') || urlParams.get('shared');
                     
-                    console.log('Loading data - Student View:', this.isStudentView, 'Plan ID:', this.sharedPlanId);
+                    console.log('=== INITIAL LOAD ===');
+                    console.log('Student View:', this.isStudentView);
+                    console.log('Plan ID from URL:', this.sharedPlanId);
 
                     if (this.isStudentView) {
                         this.setupStudentView();
@@ -1533,49 +1536,56 @@
 
             loadSharedPlan() {
                 try {
-                    console.log('Loading shared plan with ID:', this.sharedPlanId);
+                    console.log('=== LOADING SHARED PLAN ===');
+                    console.log('Plan ID from URL:', this.sharedPlanId);
                     
-                    if (!this.sharedPlanId) {
-                        // Try to find any shared plan in localStorage
-                        const keys = Object.keys(localStorage);
-                        const sharedKey = keys.find(key => key.startsWith(`${CONFIG.STORAGE_PREFIX}shared_`));
-                        
-                        if (sharedKey) {
-                            this.sharedPlanId = sharedKey.replace(`${CONFIG.STORAGE_PREFIX}`, '');
-                            console.log('Found shared plan in localStorage:', this.sharedPlanId);
-                        }
+                    // List all shared plans in localStorage for debugging
+                    const allKeys = Object.keys(localStorage);
+                    const sharedKeys = allKeys.filter(key => key.startsWith(`${CONFIG.STORAGE_PREFIX}shared_`));
+                    console.log('All shared keys in localStorage:', sharedKeys);
+                    
+                    if (!this.sharedPlanId && sharedKeys.length > 0) {
+                        // Use the first shared plan found
+                        this.sharedPlanId = sharedKeys[0].replace(`${CONFIG.STORAGE_PREFIX}`, '');
+                        console.log('Using first available plan:', this.sharedPlanId);
                     }
                     
                     if (this.sharedPlanId) {
-                        const planData = localStorage.getItem(`${CONFIG.STORAGE_PREFIX}${this.sharedPlanId}`);
+                        const storageKey = `${CONFIG.STORAGE_PREFIX}${this.sharedPlanId}`;
+                        console.log('Looking for key:', storageKey);
+                        
+                        const planData = localStorage.getItem(storageKey);
+                        console.log('Found data:', planData ? 'YES' : 'NO');
                         
                         if (planData) {
                             const plan = JSON.parse(planData);
-                            console.log('Loaded plan data:', plan);
+                            console.log('Parsed plan:', plan);
                             
-                            if (plan.units) {
+                            if (plan.units && Array.isArray(plan.units)) {
                                 this.units = plan.units;
                                 console.log('Loaded units:', this.units.length);
+                                console.log('Sample units:', this.units.slice(0, 3));
+                            } else {
+                                console.warn('Plan has no valid units array');
+                                this.units = [...this.defaultUnits];
                             }
                             
                             if (plan.courseData) {
                                 this.courseData = plan.courseData;
-                                // Ensure project milestones have IDs
-                                if (this.courseData.projectMilestones) {
-                                    this.courseData.projectMilestones = this.courseData.projectMilestones.map((milestone, index) => ({
-                                        ...milestone,
-                                        id: milestone.id || `milestone-${index + 1}`
-                                    }));
-                                }
                             }
                             
                             if (plan.blockedWeeks) {
                                 this.blockedWeeks = plan.blockedWeeks;
                             }
                             
+                            if (plan.projectMilestones) {
+                                this.courseData.projectMilestones = plan.projectMilestones;
+                            }
+                            
                             this.showToast('Shared plan loaded successfully', 'success');
                         } else {
                             console.warn('No plan data found for ID:', this.sharedPlanId);
+                            console.warn('Available keys:', allKeys);
                             this.units = [...this.defaultUnits];
                             this.showToast('Using default course sequence', 'info');
                         }
@@ -1585,11 +1595,14 @@
                         this.showToast('Using default course sequence', 'info');
                     }
                     
+                    console.log('Final units count:', this.units.length);
+                    
                     // Force render
                     this.renderEverything();
                     
                 } catch (error) {
                     console.error('Failed to load shared plan:', error);
+                    console.error('Error details:', error.message, error.stack);
                     this.units = [...this.defaultUnits];
                     this.showToast('Error loading plan, using default', 'error');
                     this.renderEverything();
@@ -2053,6 +2066,21 @@
                 const sharePlanBtn = document.getElementById('sharePlan');
                 if (sharePlanBtn) sharePlanBtn.addEventListener('click', () => this.sharePlan());
                 
+                const forceSyncBtn = document.getElementById('forceSync');
+                if (forceSyncBtn) forceSyncBtn.addEventListener('click', () => {
+                    this.updateSharedPlan();
+                    this.showToast('Forced sync to student view', 'success');
+                    
+                    // Also regenerate share link with current data
+                    const shareUrl = this.generateShareLink();
+                    const panel = document.getElementById('sharePanel');
+                    const input = document.getElementById('shareLink');
+                    if (panel && input) {
+                        input.value = shareUrl;
+                        panel.classList.add('show');
+                    }
+                });
+                
                 const resetPlanBtn = document.getElementById('resetPlan');
                 if (resetPlanBtn) resetPlanBtn.addEventListener('click', () => this.resetToDefault());
                 
@@ -2145,44 +2173,162 @@
                 });
             }
 
-            // ========== OTHER METHODS (shortened for brevity) ==========
-            // Note: Other methods like moveUnit, savePlan, etc. remain the same as before
-            // but with added updateSharedPlan() calls at the end where needed
-            
-            undo() {
-                if (this.historyIndex > 0) {
-                    this.historyIndex--;
-                    const state = this.history[this.historyIndex];
-                    this.units = JSON.parse(JSON.stringify(state.units));
-                    this.courseData = JSON.parse(JSON.stringify(state.courseData));
-                    this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
-                    this.renderEverything();
-                    this.showToast('Undo', 'success');
-                    return true;
+            // ========== SHARING AND SYNC ==========
+            generateShareLink() {
+                // Use existing shared plan ID if available, otherwise create new
+                let shareId = this.sharedPlanId;
+                
+                if (!shareId) {
+                    // Try to find existing shared plan
+                    const existingKeys = Object.keys(localStorage)
+                        .filter(key => key.startsWith(`${CONFIG.STORAGE_PREFIX}shared_`));
+                    
+                    if (existingKeys.length > 0) {
+                        // Use the first existing shared plan
+                        shareId = existingKeys[0].replace(`${CONFIG.STORAGE_PREFIX}`, '');
+                        console.log('Using existing share ID:', shareId);
+                    } else {
+                        // Create new
+                        shareId = `shared_${Date.now()}`;
+                        console.log('Creating new share ID:', shareId);
+                    }
                 }
-                return false;
+                
+                const shareData = {
+                    id: shareId,
+                    name: 'Shared Student View',
+                    date: new Date().toISOString(),
+                    units: JSON.parse(JSON.stringify(this.units)),
+                    courseData: JSON.parse(JSON.stringify(this.courseData)),
+                    blockedWeeks: JSON.parse(JSON.stringify(this.blockedWeeks)),
+                    projectMilestones: JSON.parse(JSON.stringify(this.courseData.projectMilestones)),
+                    lastUpdate: new Date().toISOString(),
+                    version: CONFIG.APP_VERSION
+                };
+
+                // SAVE to localStorage with the CORRECT key
+                localStorage.setItem(`${CONFIG.STORAGE_PREFIX}${shareId}`, JSON.stringify(shareData));
+                console.log('Saved shared plan with ID:', shareId, 'Data:', shareData);
+
+                const baseUrl = window.location.origin + window.location.pathname;
+                const shareUrl = `${baseUrl}?student=true&plan=${shareId}`;
+                
+                return shareUrl;
             }
 
-            redo() {
-                if (this.historyIndex < this.history.length - 1) {
-                    this.historyIndex++;
-                    const state = this.history[this.historyIndex];
-                    this.units = JSON.parse(JSON.stringify(state.units));
-                    this.courseData = JSON.parse(JSON.stringify(state.courseData));
-                    this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
-                    this.renderEverything();
-                    this.showToast('Redo', 'success');
-                    return true;
+            updateSharedPlan() {
+                try {
+                    console.log('Updating shared plans...');
+                    
+                    // Get ALL shared plan keys
+                    const sharedKeys = Object.keys(localStorage)
+                        .filter(key => key.startsWith(`${CONFIG.STORAGE_PREFIX}shared_`));
+                    
+                    console.log('Found shared keys:', sharedKeys);
+                    
+                    if (sharedKeys.length === 0) {
+                        // Create a new shared plan if none exists
+                        const shareId = `shared_${Date.now()}`;
+                        console.log('No shared plans found, creating new one:', shareId);
+                        this.generateShareLink();
+                        return;
+                    }
+                    
+                    // Update EVERY shared plan with current state
+                    sharedKeys.forEach(key => {
+                        let data;
+                        try {
+                            data = JSON.parse(localStorage.getItem(key)) || {};
+                        } catch (e) {
+                            data = {};
+                        }
+                        
+                        // ALWAYS update, even if data structure is incomplete
+                        data.units = JSON.parse(JSON.stringify(this.units));
+                        data.courseData = JSON.parse(JSON.stringify(this.courseData));
+                        data.blockedWeeks = JSON.parse(JSON.stringify(this.blockedWeeks));
+                        data.projectMilestones = JSON.parse(JSON.stringify(this.courseData.projectMilestones));
+                        data.lastUpdate = new Date().toISOString();
+                        data.version = CONFIG.APP_VERSION;
+                        
+                        localStorage.setItem(key, JSON.stringify(data));
+                        console.log('Updated shared plan:', key);
+                    });
+                    
+                    // Also save an autosave
+                    localStorage.setItem(`${CONFIG.STORAGE_PREFIX}autosave`, JSON.stringify({
+                        units: this.units,
+                        courseData: this.courseData,
+                        blockedWeeks: this.blockedWeeks,
+                        projectMilestones: this.courseData.projectMilestones,
+                        timestamp: Date.now(),
+                        version: CONFIG.APP_VERSION
+                    }));
+                    
+                    this.showSyncNotification('Changes saved to student view');
+                    
+                } catch (error) {
+                    console.error('Failed to update shared plans:', error);
                 }
-                return false;
             }
 
-            getTermForWeek(week) {
-                return this.courseData.terms.find(term => 
-                    week >= term.startWeek && week < term.startWeek + term.weeks
-                );
+            sharePlan() {
+                if (this.isStudentView) return;
+                
+                // First, update the shared plan with current data
+                this.updateSharedPlan();
+                
+                // Then generate and show the share link
+                const shareUrl = this.generateShareLink();
+                
+                // Show share panel
+                const panel = document.getElementById('sharePanel');
+                const input = document.getElementById('shareLink');
+                const copyBtn = document.getElementById('copyShareLink');
+                const qrContainer = document.getElementById('qrCode');
+                
+                input.value = shareUrl;
+                panel.classList.add('show');
+                
+                // Generate QR code
+                qrContainer.innerHTML = `
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}" 
+                         alt="QR Code" style="border: 1px solid #ddd; border-radius: 6px;">
+                    <div style="font-size: 12px; margin-top: 10px; color: #636e72;">
+                        <div style="margin-bottom: 5px;">Students will see:</div>
+                        <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 11px;">
+                            • Simplified timeline view<br>
+                            • Term overviews<br>
+                            • Unit details on click<br>
+                            • No editing controls<br>
+                            • Updated automatically
+                        </div>
+                        <button onclick="window.open('${shareUrl}', '_blank')" 
+                                style="width: 100%; margin-top: 10px; padding: 8px; background: #0984e3; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Open Student View in New Tab
+                        </button>
+                    </div>
+                `;
+                
+                copyBtn.onclick = () => {
+                    input.select();
+                    input.setSelectionRange(0, 99999);
+                    document.execCommand('copy');
+                    this.showToast('Link copied to clipboard!', 'success');
+                };
             }
 
+            toggleViewMode() {
+                if (this.isStudentView) {
+                    // Switch to editor view
+                    window.location.href = window.location.pathname;
+                } else {
+                    // Show preview of student view in the share panel
+                    this.sharePlan();
+                }
+            }
+
+            // ========== UNIT MANAGEMENT ==========
             setupTimelineEvents() {
                 const container = document.getElementById('timelineContent');
                 if (!container) return;
@@ -2287,140 +2433,6 @@
                 this.updateSharedPlan();
             }
 
-            updateSharedPlan() {
-                try {
-                    const sharedPlans = Object.keys(localStorage)
-                        .filter(key => key.startsWith(`${CONFIG.STORAGE_PREFIX}shared_`))
-                        .map(key => ({
-                            key,
-                            data: JSON.parse(localStorage.getItem(key))
-                        }));
-                    
-                    sharedPlans.forEach(({ key, data }) => {
-                        if (data && data.units) {
-                            data.units = JSON.parse(JSON.stringify(this.units));
-                            data.courseData = JSON.parse(JSON.stringify(this.courseData));
-                            data.blockedWeeks = JSON.parse(JSON.stringify(this.blockedWeeks));
-                            data.lastUpdate = new Date().toISOString();
-                            localStorage.setItem(key, JSON.stringify(data));
-                        }
-                    });
-                } catch (error) {
-                    console.error('Failed to update shared plans:', error);
-                }
-            }
-
-            // ========== UTILITIES ==========
-            updateTotalWeeksDisplay() {
-                const display = document.getElementById('totalWeeksDisplay');
-                if (display) {
-                    display.textContent = this.courseData.totalWeeks;
-                }
-            }
-
-            showToast(message, type = 'info') {
-                const container = document.getElementById('toastsContainer');
-                if (!container) return;
-
-                const toast = document.createElement('div');
-                toast.className = `toast toast-${type}`;
-                toast.textContent = message;
-                container.appendChild(toast);
-
-                setTimeout(() => {
-                    toast.style.opacity = '0';
-                    toast.style.transform = 'translateX(100%)';
-                    setTimeout(() => toast.remove(), 300);
-                }, 3000);
-            }
-
-            showSyncNotification(message) {
-                const status = document.getElementById('syncStatus');
-                const messageEl = document.getElementById('syncMessage');
-                if (status && messageEl) {
-                    messageEl.textContent = message;
-                    status.classList.add('show');
-                    
-                    setTimeout(() => {
-                        status.classList.remove('show');
-                    }, 3000);
-                }
-            }
-
-            hideLoadingScreen() {
-                const loading = document.getElementById('loading');
-                if (loading) {
-                    loading.style.opacity = '0';
-                    setTimeout(() => {
-                        loading.style.display = 'none';
-                    }, 300);
-                }
-            }
-
-            darkenColor(color, percent) {
-                const num = parseInt(color.replace('#', ''), 16);
-                const amt = Math.round(2.55 * percent);
-                const R = (num >> 16) - amt;
-                const G = (num >> 8 & 0x00FF) - amt;
-                const B = (num & 0x0000FF) - amt;
-                return '#' + (
-                    0x1000000 +
-                    (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
-                    (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
-                    (B < 255 ? B < 1 ? 0 : B : 255)
-                ).toString(16).slice(1);
-            }
-
-            // ========== SETUP KEYBOARD SHORTCUTS ==========
-            setupKeyboardShortcuts() {
-                document.addEventListener('keydown', (e) => {
-                    if (e.target.matches('input, textarea, select')) return;
-                    
-                    if (e.ctrlKey || e.metaKey) {
-                        switch(e.key) {
-                            case 'z':
-                                if (!this.isStudentView) {
-                                    e.preventDefault();
-                                    if (e.shiftKey) {
-                                        this.redo();
-                                    } else {
-                                        this.undo();
-                                    }
-                                }
-                                break;
-                            case 'y':
-                                if (!this.isStudentView) {
-                                    e.preventDefault();
-                                    this.redo();
-                                }
-                                break;
-                            case 's':
-                                if (!this.isStudentView) {
-                                    e.preventDefault();
-                                    this.savePlan();
-                                }
-                                break;
-                            case 'p':
-                                e.preventDefault();
-                                this.printPlan();
-                                break;
-                        }
-                    }
-                    
-                    if (e.key === 'Escape') {
-                        document.querySelectorAll('.modal').forEach(modal => {
-                            modal.style.display = 'none';
-                        });
-                        const panel = document.getElementById('sharePanel');
-                        if (panel) panel.classList.remove('show');
-                    }
-                });
-            }
-
-            // ========== OTHER METHODS (stub implementations) ==========
-            // Note: These are simplified versions - you already have the full implementations
-            // from the previous code. I'm just including stubs to show where they should be.
-            
             renderUnitPalette() {
                 // Your existing renderUnitPalette method
                 if (this.isStudentView) return;
@@ -2773,6 +2785,7 @@
                     units: this.units,
                     courseData: this.courseData,
                     blockedWeeks: this.blockedWeeks,
+                    projectMilestones: this.courseData.projectMilestones,
                     version: CONFIG.APP_VERSION
                 };
 
@@ -2786,6 +2799,7 @@
                         units: this.units,
                         courseData: this.courseData,
                         blockedWeeks: this.blockedWeeks,
+                        projectMilestones: this.courseData.projectMilestones,
                         timestamp: Date.now(),
                         version: CONFIG.APP_VERSION
                     }));
@@ -2809,6 +2823,7 @@
                         this.units = plan.units || [];
                         this.courseData = plan.courseData || this.courseData;
                         this.blockedWeeks = plan.blockedWeeks || {};
+                        this.courseData.projectMilestones = plan.projectMilestones || this.courseData.projectMilestones;
                         this.renderEverything();
                         this.showToast(`Loaded "${plan.name}"`, 'success');
                         this.showSyncNotification('Plan loaded');
@@ -2848,10 +2863,10 @@
                             { number: 4, weeks: 7, startWeek: 31, name: "Apex & Finalisation" }
                         ],
                         projectMilestones: [
-                            { week: 18, label: "Project Start" },
-                            { week: 25, label: "Phase 2" },
-                            { week: 30, label: "Integration" },
-                            { week: 34, label: "Final Phase" }
+                            { id: 'milestone-1', week: 18, label: "Project Start" },
+                            { id: 'milestone-2', week: 25, label: "Phase 2" },
+                            { id: 'milestone-3', week: 30, label: "Integration" },
+                            { id: 'milestone-4', week: 34, label: "Final Phase" }
                         ]
                     };
                     this.blockedWeeks = {};
@@ -2871,103 +2886,6 @@
                     this.showToast('Timetable cleared', 'success');
                     this.showSyncNotification('Timetable cleared');
                     this.updateSharedPlan();
-                }
-            }
-
-            // ========== SHARING ==========
-            generateShareLink() {
-                const shareId = `shared_${Date.now()}`;
-                const shareData = {
-                    id: shareId,
-                    name: 'Shared Student View',
-                    date: new Date().toISOString(),
-                    units: JSON.parse(JSON.stringify(this.units)),
-                    courseData: JSON.parse(JSON.stringify(this.courseData)),
-                    blockedWeeks: JSON.parse(JSON.stringify(this.blockedWeeks)),
-                    lastUpdate: new Date().toISOString(),
-                    version: CONFIG.APP_VERSION
-                };
-
-                localStorage.setItem(`${CONFIG.STORAGE_PREFIX}${shareId}`, JSON.stringify(shareData));
-
-                const baseUrl = window.location.origin + window.location.pathname;
-                const shareUrl = `${baseUrl}?student=true&plan=${shareId}`;
-                
-                return shareUrl;
-            }
-
-            sharePlan() {
-                if (this.isStudentView) return;
-                
-                const shareUrl = this.generateShareLink();
-                
-                // Show share panel
-                const panel = document.getElementById('sharePanel');
-                const input = document.getElementById('shareLink');
-                const copyBtn = document.getElementById('copyShareLink');
-                const qrContainer = document.getElementById('qrCode');
-                
-                input.value = shareUrl;
-                panel.classList.add('show');
-                
-                // Generate QR code
-                qrContainer.innerHTML = `
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareUrl)}" 
-                         alt="QR Code" style="border: 1px solid #ddd; border-radius: 6px;">
-                    <div style="font-size: 12px; margin-top: 10px; color: #636e72;">
-                        <div style="margin-bottom: 5px;">Students will see:</div>
-                        <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 11px;">
-                            • Simplified timeline view<br>
-                            • Term overviews<br>
-                            • Unit details on click<br>
-                            • No editing controls<br>
-                            • Updated automatically
-                        </div>
-                        <button onclick="window.open('${shareUrl}', '_blank')" 
-                                style="width: 100%; margin-top: 10px; padding: 8px; background: #0984e3; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            Open Student View in New Tab
-                        </button>
-                    </div>
-                `;
-                
-                copyBtn.onclick = () => {
-                    input.select();
-                    input.setSelectionRange(0, 99999);
-                    document.execCommand('copy');
-                    this.showToast('Link copied to clipboard!', 'success');
-                };
-            }
-
-            toggleViewMode() {
-                if (this.isStudentView) {
-                    // Switch to editor view
-                    window.location.href = window.location.pathname;
-                } else {
-                    // Show preview of student view in the share panel
-                    this.sharePlan();
-                }
-            }
-
-            updateSharedPlan() {
-                try {
-                    const sharedPlans = Object.keys(localStorage)
-                        .filter(key => key.startsWith(`${CONFIG.STORAGE_PREFIX}shared_`))
-                        .map(key => ({
-                            key,
-                            data: JSON.parse(localStorage.getItem(key))
-                        }));
-                    
-                    sharedPlans.forEach(({ key, data }) => {
-                        if (data && data.units) {
-                            data.units = JSON.parse(JSON.stringify(this.units));
-                            data.courseData = JSON.parse(JSON.stringify(this.courseData));
-                            data.blockedWeeks = JSON.parse(JSON.stringify(this.blockedWeeks));
-                            data.lastUpdate = new Date().toISOString();
-                            localStorage.setItem(key, JSON.stringify(data));
-                        }
-                    });
-                } catch (error) {
-                    console.error('Failed to update shared plans:', error);
                 }
             }
 
@@ -3274,7 +3192,8 @@
                     timestamp: new Date().toISOString(),
                     units: this.units,
                     courseData: this.courseData,
-                    blockedWeeks: this.blockedWeeks
+                    blockedWeeks: this.blockedWeeks,
+                    projectMilestones: this.courseData.projectMilestones
                 };
 
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -3307,6 +3226,7 @@
                             this.units = data.units;
                             this.courseData = data.courseData;
                             this.blockedWeeks = data.blockedWeeks || {};
+                            this.courseData.projectMilestones = data.projectMilestones || this.courseData.projectMilestones;
                             this.renderEverything();
                             this.showToast('Plan imported successfully', 'success');
                             this.showSyncNotification('Plan imported');
@@ -3329,6 +3249,42 @@
             }
 
             // ========== UTILITIES ==========
+            undo() {
+                if (this.historyIndex > 0) {
+                    this.historyIndex--;
+                    const state = this.history[this.historyIndex];
+                    this.units = JSON.parse(JSON.stringify(state.units));
+                    this.courseData = JSON.parse(JSON.stringify(state.courseData));
+                    this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
+                    this.renderEverything();
+                    this.showToast('Undo', 'success');
+                    this.updateSharedPlan();
+                    return true;
+                }
+                return false;
+            }
+
+            redo() {
+                if (this.historyIndex < this.history.length - 1) {
+                    this.historyIndex++;
+                    const state = this.history[this.historyIndex];
+                    this.units = JSON.parse(JSON.stringify(state.units));
+                    this.courseData = JSON.parse(JSON.stringify(state.courseData));
+                    this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
+                    this.renderEverything();
+                    this.showToast('Redo', 'success');
+                    this.updateSharedPlan();
+                    return true;
+                }
+                return false;
+            }
+
+            getTermForWeek(week) {
+                return this.courseData.terms.find(term => 
+                    week >= term.startWeek && week < term.startWeek + term.weeks
+                );
+            }
+
             updateTotalWeeksDisplay() {
                 const display = document.getElementById('totalWeeksDisplay');
                 if (display) {
@@ -3387,117 +3343,6 @@
                     (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
                     (B < 255 ? B < 1 ? 0 : B : 255)
                 ).toString(16).slice(1);
-            }
-
-            // ========== EVENT LISTENERS ==========
-            setupEventListeners() {
-                // View mode changes
-                const viewModeSelect = document.getElementById('viewMode');
-                if (viewModeSelect && !this.isStudentView) {
-                    viewModeSelect.addEventListener('change', (e) => {
-                        this.currentView = e.target.value;
-                        this.renderTimeline();
-                    });
-                }
-
-                // Highlight mode
-                const highlightMode = document.getElementById('highlightMode');
-                if (highlightMode) {
-                    highlightMode.addEventListener('change', (e) => {
-                        this.showToast(`Highlighting ${e.target.value} units`, 'info');
-                    });
-                }
-
-                // Control buttons
-                const savePlanBtn = document.getElementById('savePlan');
-                if (savePlanBtn) savePlanBtn.addEventListener('click', () => this.savePlan());
-                
-                const sharePlanBtn = document.getElementById('sharePlan');
-                if (sharePlanBtn) sharePlanBtn.addEventListener('click', () => this.sharePlan());
-                
-                const resetPlanBtn = document.getElementById('resetPlan');
-                if (resetPlanBtn) resetPlanBtn.addEventListener('click', () => this.resetToDefault());
-                
-                const clearTimetableBtn = document.getElementById('clearTimetable');
-                if (clearTimetableBtn) clearTimetableBtn.addEventListener('click', () => this.clearTimetable());
-                
-                const printPlanBtn = document.getElementById('printPlan');
-                if (printPlanBtn) printPlanBtn.addEventListener('click', () => this.printPlan());
-                
-                const exportPlanBtn = document.getElementById('exportPlan');
-                if (exportPlanBtn) exportPlanBtn.addEventListener('click', () => this.exportPlan());
-                
-                const applyBlockingBtn = document.getElementById('applyBlocking');
-                if (applyBlockingBtn) applyBlockingBtn.addEventListener('click', () => this.applyWeekBlocking());
-                
-                // Week management
-                const addWeekBtn = document.getElementById('addWeekBtn');
-                if (addWeekBtn) addWeekBtn.addEventListener('click', () => this.addWeek());
-                
-                const removeWeekBtn = document.getElementById('removeWeekBtn');
-                if (removeWeekBtn) removeWeekBtn.addEventListener('click', () => this.removeWeek());
-                
-                const addWeekToTermBtn = document.getElementById('addWeekToTermBtn');
-                if (addWeekToTermBtn) addWeekToTermBtn.addEventListener('click', () => this.addWeekToTerm());
-                
-                const removeWeekFromTermBtn = document.getElementById('removeWeekFromTermBtn');
-                if (removeWeekFromTermBtn) removeWeekFromTermBtn.addEventListener('click', () => this.removeWeekFromTerm());
-                
-                // Unit management
-                const addCustomUnitBtn = document.getElementById('addCustomUnit');
-                if (addCustomUnitBtn) addCustomUnitBtn.addEventListener('click', () => this.addUnitFromTemplate(
-                    { code: 'CUSTOM', name: 'Custom Unit/Block', color: 'foundational', tags: ['CUSTOM'] },
-                    1,
-                    'core'
-                ));
-                
-                const importPlanBtn = document.getElementById('importPlanBtn');
-                if (importPlanBtn) importPlanBtn.addEventListener('click', () => this.importPlan());
-                
-                // View toggle
-                const toggleBtn = document.getElementById('toggleView');
-                if (toggleBtn) {
-                    toggleBtn.addEventListener('click', () => this.toggleViewMode());
-                }
-                
-                // Modal close buttons
-                document.querySelectorAll('.close-modal').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        this.closest('.modal').style.display = 'none';
-                    });
-                });
-                
-                document.querySelectorAll('.modal').forEach(modal => {
-                    modal.addEventListener('click', (e) => {
-                        if (e.target === modal) {
-                            modal.style.display = 'none';
-                        }
-                    });
-                });
-                
-                // Close share panel when clicking outside
-                document.addEventListener('click', (e) => {
-                    const panel = document.getElementById('sharePanel');
-                    const toggleBtn = document.getElementById('toggleView');
-                    const shareBtn = document.getElementById('sharePlan');
-                    
-                    if (panel && panel.classList.contains('show') && 
-                        !panel.contains(e.target) && 
-                        !(toggleBtn && toggleBtn.contains(e.target)) &&
-                        !(shareBtn && shareBtn.contains(e.target))) {
-                        panel.classList.remove('show');
-                    }
-                });
-                
-                // Close share panel with Escape key
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape') {
-                        const panel = document.getElementById('sharePanel');
-                        if (panel && panel.classList.contains('show')) {
-                            panel.classList.remove('show');
-                        }
-                    }
-                });
             }
 
             setupKeyboardShortcuts() {
