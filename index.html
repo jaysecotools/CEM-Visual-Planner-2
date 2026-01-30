@@ -736,7 +736,7 @@
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            width: 300px;
+            width: 350px;
             display: none;
         }
 
@@ -899,12 +899,56 @@
             .timeline-container {
                 box-shadow: none;
                 border: 1px solid #ddd;
+                overflow: visible !important;
+                width: 100% !important;
             }
             
             .header {
                 background: #2d3436 !important;
                 -webkit-print-color-adjust: exact;
             }
+            
+            .student-term-overviews {
+                display: block !important;
+                page-break-before: always;
+            }
+            
+            .term-overview {
+                page-break-inside: avoid;
+            }
+            
+            .week-slot {
+                border: 1px solid #ddd !important;
+                min-height: 100px;
+            }
+            
+            /* Ensure full timeline prints */
+            .timeline-grid {
+                overflow: visible !important;
+                width: 100% !important;
+            }
+            
+            .swimlane {
+                break-inside: avoid;
+            }
+            
+            .week-headers, .term-headers {
+                position: static !important;
+            }
+        }
+
+        /* PDF Export Specific */
+        .pdf-export-mode .timeline-container {
+            overflow: visible !important;
+            width: 100% !important;
+        }
+        
+        .pdf-export-mode .timeline-grid {
+            min-width: 100% !important;
+        }
+        
+        .pdf-export-mode .student-term-overviews {
+            display: block !important;
         }
     </style>
 </head>
@@ -935,8 +979,39 @@
         <p style="font-size: 12px; color: #636e72; margin-bottom: 10px;">
             Share this link with students for read-only access
         </p>
-        <div class="qr-code" id="qrCode">
-            <!-- QR code will be generated here -->
+        
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+            <h5 style="margin-bottom: 10px;">Preview & Test Options</h5>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button id="previewStudentView" class="success" style="width: 100%;">
+                    👁️ Preview Student View
+                </button>
+                <button id="openStudentViewTab" class="primary" style="width: 100%;">
+                    ↗️ Open in New Tab
+                </button>
+                <button id="testStudentView" style="width: 100%; background: #fdcb6e; color: #2d3436;">
+                    🔍 Test & Verify
+                </button>
+            </div>
+        </div>
+        
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+            <h5 style="margin-bottom: 10px;">Print & Export</h5>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button id="printFullSchedule" class="primary" style="width: 100%;">
+                    🖨️ Print Full Schedule
+                </button>
+                <button id="saveAsPDF" class="success" style="width: 100%;">
+                    📄 Save as PDF
+                </button>
+                <button id="printStudentView" style="width: 100%;">
+                    📋 Print Student View
+                </button>
+            </div>
+        </div>
+        
+        <div style="margin-top: 15px; font-size: 11px; color: #666; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+            <strong>Tip:</strong> Before sharing, make sure to save your plan. The student view will show the latest saved version.
         </div>
     </div>
 
@@ -1129,7 +1204,7 @@
             Drag units to adjust sequence. Seasonal units have constraints. Click units to add notes and resources.
         </p>
         <div style="margin-top: 10px; font-size: 11px; color: #999;">
-            <span>Press Ctrl+Z to undo, Ctrl+Y to redo | Ctrl+S to save | Ctrl+P to print</span>
+            <span>Press Ctrl+Z to undo, Ctrl+Y to redo | Ctrl+S to save | Ctrl+P to print full schedule</span>
         </div>
     </footer>
 
@@ -1161,13 +1236,11 @@
     <!-- Toasts Container -->
     <div id="toastsContainer"></div>
 
-
 <!-- Main JavaScript -->
 <script>
     // ========== CONFIGURATION ==========
     const CONFIG = {
         APP_VERSION: '3.0.0',
-        // SINGLE SOURCE OF TRUTH: One key for everything
         SHARED_STORAGE_KEY: 'course_planner_shared_data',
         DEFAULT_TOTAL_WEEKS: 37
     };
@@ -1487,25 +1560,8 @@
                 
                 console.log('=== DATA LOADING START ===');
                 console.log('Student View:', this.isStudentView);
-                console.log('URL timestamp param:', urlParams.get('v'));
-                console.log('URL has data param:', urlParams.has('data'));
                 
-                // TRY 1: Check if data is embedded in URL (for QR codes)
-                if (urlParams.has('data')) {
-                    try {
-                        const encodedData = urlParams.get('data');
-                        const jsonData = decodeURIComponent(encodedData);
-                        const data = JSON.parse(jsonData);
-                        
-                        console.log('Found data in URL (QR code)');
-                        this.loadFromData(data);
-                        return;
-                    } catch (e) {
-                        console.warn('Failed to parse URL data:', e);
-                    }
-                }
-                
-                // TRY 2: Load from shared storage
+                // TRY 1: Load from shared storage
                 console.log('Loading from shared storage:', CONFIG.SHARED_STORAGE_KEY);
                 const sharedData = localStorage.getItem(CONFIG.SHARED_STORAGE_KEY);
                 
@@ -1602,15 +1658,6 @@
                 console.log('Saved to:', CONFIG.SHARED_STORAGE_KEY);
                 console.log('Units saved:', dataToSave.units.length);
                 console.log('Timestamp:', dataToSave.lastUpdate);
-                
-                // Also save as autosave for backward compatibility
-                localStorage.setItem('cet_autosave', JSON.stringify({
-                    units: this.units,
-                    courseData: this.courseData,
-                    blockedWeeks: this.blockedWeeks,
-                    timestamp: Date.now(),
-                    version: CONFIG.APP_VERSION
-                }));
                 
                 return true;
             } catch (error) {
@@ -2107,7 +2154,7 @@
             if (clearTimetableBtn) clearTimetableBtn.addEventListener('click', () => this.clearTimetable());
             
             const printPlanBtn = document.getElementById('printPlan');
-            if (printPlanBtn) printPlanBtn.addEventListener('click', () => this.printPlan());
+            if (printPlanBtn) printPlanBtn.addEventListener('click', () => this.printBasic());
             
             const exportPlanBtn = document.getElementById('exportPlan');
             if (exportPlanBtn) exportPlanBtn.addEventListener('click', () => this.exportPlan());
@@ -2211,8 +2258,65 @@
                     if (savePlanBtn && savePlanBtn.parentNode) {
                         savePlanBtn.parentNode.insertBefore(syncDataBtn, savePlanBtn.nextSibling);
                     }
+                    
+                    // Setup share panel buttons
+                    this.setupSharePanelButtons();
                 }
             }, 500);
+        }
+        
+        // ========== NEW: Setup share panel buttons ==========
+        setupSharePanelButtons() {
+            // Preview Student View
+            const previewBtn = document.getElementById('previewStudentView');
+            if (previewBtn) {
+                previewBtn.addEventListener('click', () => {
+                    const shareUrl = this.generateShareLink();
+                    if (shareUrl) {
+                        // Create a preview in the current window
+                        const previewWindow = window.open(shareUrl, '_blank');
+                        if (previewWindow) {
+                            this.showToast('Student view opened in new tab', 'success');
+                        }
+                    }
+                });
+            }
+            
+            // Open in New Tab
+            const openTabBtn = document.getElementById('openStudentViewTab');
+            if (openTabBtn) {
+                openTabBtn.addEventListener('click', () => {
+                    const shareUrl = this.generateShareLink();
+                    if (shareUrl) {
+                        window.open(shareUrl, '_blank');
+                        this.showToast('Student view opened in new tab', 'success');
+                    }
+                });
+            }
+            
+            // Test & Verify
+            const testBtn = document.getElementById('testStudentView');
+            if (testBtn) {
+                testBtn.addEventListener('click', () => this.testStudentViewLink());
+            }
+            
+            // Print Full Schedule
+            const printFullBtn = document.getElementById('printFullSchedule');
+            if (printFullBtn) {
+                printFullBtn.addEventListener('click', () => this.printFullSchedule());
+            }
+            
+            // Save as PDF
+            const savePDFBtn = document.getElementById('saveAsPDF');
+            if (savePDFBtn) {
+                savePDFBtn.addEventListener('click', () => this.saveAsPDF());
+            }
+            
+            // Print Student View
+            const printStudentBtn = document.getElementById('printStudentView');
+            if (printStudentBtn) {
+                printStudentBtn.addEventListener('click', () => this.printStudentView());
+            }
         }
 
         setupTimelineEvents() {
@@ -2827,213 +2931,81 @@
             console.log('Units in storage:', this.units.length);
             console.log('Timestamp:', new Date().toISOString());
             
-            // Verify data was actually saved
-            setTimeout(() => this.verifyDataSync(), 100);
-            
             return shareUrl;
         }
 
-        // ========== FIXED: SHARING ==========
-sharePlan() {
-    if (this.isStudentView) return;
-    
-    // Show saving indicator
-    this.showToast('Saving data for sharing...', 'info');
-    
-    // Force immediate save
-    const saveSuccess = this.saveData();
-    
-    if (!saveSuccess) {
-        this.showToast('Failed to save data for sharing', 'error');
-        return;
-    }
-    
-    // Generate share URL with timestamp to prevent caching
-    const baseUrl = window.location.origin + window.location.pathname;
-    const timestamp = Date.now();
-    
-    // FIX 1: Create a minimal data version for QR codes
-    const minimalData = {
-        v: CONFIG.APP_VERSION,
-        t: timestamp,
-        u: this.units.length,
-        w: this.courseData.totalWeeks
-    };
-    
-    // FIX 2: Use localStorage-based URL for QR code (simpler, shorter)
-    const qrUrl = `${baseUrl}?student=true&v=${timestamp}`;
-    
-    console.log('=== SHARE PLAN (FIXED) ===');
-    console.log('QR URL (simple):', qrUrl);
-    console.log('Data size:', qrUrl.length, 'characters');
-    console.log('Storage key:', CONFIG.SHARED_STORAGE_KEY);
-    
-    // Show share panel
-    const panel = document.getElementById('sharePanel');
-    const input = document.getElementById('shareLink');
-    const copyBtn = document.getElementById('copyShareLink');
-    const qrContainer = document.getElementById('qrCode');
-    
-    // FIX 3: Use a reliable QR code service with proper error handling
-    const qrService = 'https://api.qrserver.com/v1/create-qr-code/';
-    const qrParams = new URLSearchParams({
-        size: '150x150',
-        data: qrUrl,
-        qzone: 2,
-        format: 'png',
-        margin: 1,
-        t: timestamp  // Cache buster
-    });
-    
-    const qrImageUrl = `${qrService}?${qrParams.toString()}`;
-    
-    input.value = qrUrl;
-    panel.classList.add('show');
-    
-    // FIX 4: Better QR code HTML with loading state and fallback
-    qrContainer.innerHTML = `
-        <div style="text-align: center;">
-            <div id="qrLoading" style="padding: 20px; color: #666; font-size: 14px;">
-                Generating QR code...
-            </div>
-            <img id="qrImage" 
-                 src="${qrImageUrl}" 
-                 alt="QR Code" 
-                 style="display: none; border: 1px solid #ddd; border-radius: 6px; max-width: 150px; max-height: 150px;"
-                 onload="document.getElementById('qrLoading').style.display='none'; this.style.display='block';"
-                 onerror="document.getElementById('qrLoading').innerHTML='QR code failed to load. Try refreshing.'; console.error('QR code failed to load');">
-            <div style="margin-top: 10px; font-size: 11px; color: #666;">
-                Scan to view current schedule
-            </div>
-        </div>
-        <div style="font-size: 12px; margin-top: 10px; color: #636e72;">
-            <div style="margin-bottom: 5px;">Students will see:</div>
-            <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 11px;">
-                • Current schedule (${this.units.length} units, ${this.courseData.totalWeeks} weeks)<br>
-                • Term overviews<br>
-                • Unit details on click<br>
-                • No editing controls
-            </div>
-            <div style="margin-top: 10px; padding: 8px; background: #e3f2fd; border-radius: 4px; font-size: 11px;">
-                <strong>Important:</strong> QR code uses your saved data. Make sure to save changes before sharing!
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 10px;">
-                <button onclick="window.app.testStudentView('${qrUrl}')" 
-                        style="width: 100%; padding: 8px; background: #00b894; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Test Student View (Browser)
-                </button>
-                <button onclick="window.open('${qrUrl}', '_blank')" 
-                        style="width: 100%; padding: 8px; background: #0984e3; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Open Student View in New Tab
-                </button>
-                <button onclick="window.app.refreshQRCode()" 
-                        style="width: 100%; padding: 8px; background: #a29bfe; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    🔄 Refresh QR Code
-                </button>
-                <button onclick="window.app.verifyDataSync()" 
-                        style="width: 100%; padding: 8px; background: #fdcb6e; color: #2d3436; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                    🔍 Verify Data Sync
-                </button>
-            </div>
-        </div>
-    `;
-    
-    copyBtn.onclick = () => {
-        input.select();
-        input.setSelectionRange(0, 99999);
-        navigator.clipboard.writeText(input.value).then(() => {
-            this.showToast('Link copied to clipboard!', 'success');
-        }).catch(() => {
-            // Fallback for older browsers
-            document.execCommand('copy');
-            this.showToast('Link copied to clipboard!', 'success');
-        });
-    };
-    
-    this.showToast('Share link generated!', 'success');
-    
-    // Add a verification step
-    setTimeout(() => {
-        console.log('=== VERIFYING SHARED DATA ===');
-        const storedData = localStorage.getItem(CONFIG.SHARED_STORAGE_KEY);
-        if (storedData) {
-            const data = JSON.parse(storedData);
-            console.log('Data verified in storage:', {
-                units: data.units?.length || 0,
-                weeks: data.courseData?.totalWeeks || 0,
-                timestamp: data.lastUpdate
-            });
-            console.log('URL length:', qrUrl.length, 'characters');
-        } else {
-            console.warn('No data found in shared storage!');
-            this.showToast('Warning: No data saved to storage!', 'error');
-        }
-    }, 100);
-}
-
-// ========== NEW: Improved Refresh QR Code ==========
-refreshQRCode() {
-    if (this.isStudentView) return;
-    
-    this.showToast('Refreshing QR code with latest data...', 'info');
-    
-    // Force save current data
-    this.saveData();
-    
-    // Generate new URL with fresh timestamp
-    const baseUrl = window.location.origin + window.location.pathname;
-    const timestamp = Date.now();
-    const qrUrl = `${baseUrl}?student=true&v=${timestamp}`;
-    
-    // Update QR code with fresh image
-    const qrContainer = document.getElementById('qrCode');
-    if (qrContainer) {
-        const qrService = 'https://api.qrserver.com/v1/create-qr-code/';
-        const qrParams = new URLSearchParams({
-            size: '150x150',
-            data: qrUrl,
-            qzone: 2,
-            format: 'png',
-            margin: 1,
-            t: timestamp  // Cache buster
-        });
-        
-        const qrImageUrl = `${qrService}?${qrParams.toString()}`;
-        
-        // Find and update the QR code image
-        const qrImg = qrContainer.querySelector('#qrImage');
-        if (qrImg) {
-            // Show loading state
-            const qrLoading = qrContainer.querySelector('#qrLoading');
-            if (qrLoading) {
-                qrLoading.style.display = 'block';
-                qrLoading.textContent = 'Refreshing QR code...';
+        // ========== UPDATED: SHARING WITH NEW FEATURES ==========
+        sharePlan() {
+            if (this.isStudentView) return;
+            
+            // Show saving indicator
+            this.showToast('Saving data for sharing...', 'info');
+            
+            // Force immediate save
+            const saveSuccess = this.saveData();
+            
+            if (!saveSuccess) {
+                this.showToast('Failed to save data for sharing', 'error');
+                return;
             }
-            qrImg.style.display = 'none';
             
-            // Load new image
-            qrImg.src = qrImageUrl;
-            qrImg.onload = () => {
-                if (qrLoading) qrLoading.style.display = 'none';
-                qrImg.style.display = 'block';
-                this.showToast('QR code refreshed with latest data!', 'success');
-                console.log('QR code refreshed with timestamp:', timestamp);
-                console.log('Data in storage:', this.units.length, 'units');
+            // Generate share URL with timestamp to prevent caching
+            const baseUrl = window.location.origin + window.location.pathname;
+            const timestamp = Date.now();
+            const shareUrl = `${baseUrl}?student=true&v=${timestamp}`;
+            
+            console.log('=== SHARE PLAN ===');
+            console.log('Share URL:', shareUrl);
+            console.log('Data size:', shareUrl.length, 'characters');
+            console.log('Storage key:', CONFIG.SHARED_STORAGE_KEY);
+            
+            // Show share panel
+            const panel = document.getElementById('sharePanel');
+            const input = document.getElementById('shareLink');
+            const copyBtn = document.getElementById('copyShareLink');
+            
+            input.value = shareUrl;
+            panel.classList.add('show');
+            
+            copyBtn.onclick = () => {
+                input.select();
+                input.setSelectionRange(0, 99999);
+                navigator.clipboard.writeText(input.value).then(() => {
+                    this.showToast('Link copied to clipboard!', 'success');
+                }).catch(() => {
+                    // Fallback for older browsers
+                    document.execCommand('copy');
+                    this.showToast('Link copied to clipboard!', 'success');
+                });
             };
             
-            qrImg.onerror = () => {
-                if (qrLoading) {
-                    qrLoading.textContent = 'QR code refresh failed. Try again.';
+            this.showToast('Share link generated!', 'success');
+            
+            // Add a verification step
+            setTimeout(() => {
+                console.log('=== VERIFYING SHARED DATA ===');
+                const storedData = localStorage.getItem(CONFIG.SHARED_STORAGE_KEY);
+                if (storedData) {
+                    const data = JSON.parse(storedData);
+                    console.log('Data verified in storage:', {
+                        units: data.units?.length || 0,
+                        weeks: data.courseData?.totalWeeks || 0,
+                        timestamp: data.lastUpdate
+                    });
+                    console.log('URL length:', shareUrl.length, 'characters');
+                } else {
+                    console.warn('No data found in shared storage!');
+                    this.showToast('Warning: No data saved to storage!', 'error');
                 }
-                this.showToast('Failed to refresh QR code', 'error');
-            };
+            }, 100);
         }
-    }
-}
-        // ========== TEST METHOD ==========
-        testStudentView(url) {
-            // Open in new window and check data
-            const testWindow = window.open(url, '_blank', 'width=1200,height=800');
+
+        // ========== NEW: Test Student View Link ==========
+        testStudentViewLink() {
+            const shareUrl = this.generateShareLink();
+            if (!shareUrl) return;
+            
+            const testWindow = window.open(shareUrl, '_blank', 'width=1200,height=800');
             
             if (testWindow) {
                 this.showToast('Opening test window...', 'info');
@@ -3067,9 +3039,89 @@ refreshQRCode() {
                 // Switch to editor view
                 window.location.href = window.location.pathname;
             } else {
-                // Show preview of student view in the share panel
+                // Show share panel with student view options
                 this.sharePlan();
             }
+        }
+
+        // ========== NEW: PRINT AND PDF FUNCTIONS ==========
+        printFullSchedule() {
+            // First show the student term overviews
+            const studentOverviews = document.getElementById('studentTermOverviews');
+            if (studentOverviews) {
+                studentOverviews.style.display = 'block';
+            }
+            
+            // Add a class to enable PDF export mode
+            document.body.classList.add('pdf-export-mode');
+            
+            // Trigger print
+            setTimeout(() => {
+                window.print();
+                
+                // Clean up after printing
+                setTimeout(() => {
+                    document.body.classList.remove('pdf-export-mode');
+                    if (this.isStudentView && studentOverviews) {
+                        studentOverviews.style.display = 'block';
+                    } else if (studentOverviews) {
+                        studentOverviews.style.display = 'none';
+                    }
+                }, 1000);
+            }, 500);
+        }
+        
+        printBasic() {
+            // Basic print function for the original print button
+            window.print();
+        }
+        
+        printStudentView() {
+            // Save current view
+            const wasStudentView = this.isStudentView;
+            
+            // Temporarily switch to student view for printing
+            if (!wasStudentView) {
+                // Create a temporary student view
+                this.setupStudentView();
+                this.renderStudentTermOverviews();
+            }
+            
+            // Trigger print
+            setTimeout(() => {
+                window.print();
+                
+                // Restore original view
+                if (!wasStudentView) {
+                    document.body.classList.remove('student-view');
+                    document.body.classList.add('editor-view');
+                    const studentOverviews = document.getElementById('studentTermOverviews');
+                    if (studentOverviews) {
+                        studentOverviews.style.display = 'none';
+                    }
+                    
+                    // Update UI back to editor view
+                    const courseTitle = document.getElementById('courseTitle');
+                    const courseSubtitle = document.getElementById('courseSubtitle');
+                    const viewModeIndicator = document.getElementById('viewModeIndicator');
+                    const courseDescription = document.getElementById('courseDescription');
+                    const viewIcon = document.getElementById('viewIcon');
+                    const viewLabel = document.getElementById('viewLabel');
+                    
+                    if (courseTitle) courseTitle.textContent = 'Certificate III in Conservation & Ecosystem Management';
+                    if (courseSubtitle) courseSubtitle.textContent = 'Course Sequencing Tool | Interactive Planner';
+                    if (viewModeIndicator) viewModeIndicator.textContent = 'Interactive Planner';
+                    if (courseDescription) courseDescription.textContent = 'Drag units to adjust sequence | Click units to edit details | Save/load your custom plans';
+                    if (viewIcon) viewIcon.textContent = '👁️';
+                    if (viewLabel) viewLabel.textContent = 'Student View';
+                }
+            }, 500);
+        }
+        
+        saveAsPDF() {
+            // Use browser's print to PDF functionality
+            this.showToast('Use "Print Full Schedule" and choose "Save as PDF" in print dialog', 'info');
+            this.printFullSchedule();
         }
 
         // ========== RESET OPERATIONS ==========
@@ -3457,10 +3509,6 @@ refreshQRCode() {
             fileInput.value = '';
         }
 
-        printPlan() {
-            window.print();
-        }
-
         // ========== UTILITIES ==========
         getTermForWeek(week) {
             return this.courseData.terms.find(term => 
@@ -3578,7 +3626,7 @@ refreshQRCode() {
                             break;
                         case 'p':
                             e.preventDefault();
-                            this.printPlan();
+                            this.printFullSchedule();
                             break;
                     }
                 }
