@@ -1007,6 +1007,12 @@
                 <button id="printStudentView" style="width: 100%;">
                     📋 Print Student View
                 </button>
+                <button id="exportCSV" style="width: 100%; background: #a29bfe; color: white;">
+                    📊 Export CSV List
+                </button>
+                <button id="exportTextList" style="width: 100%; background: #4ecdc4; color: white;">
+                    📝 Export Text List
+                </button>
             </div>
         </div>
         
@@ -1077,7 +1083,8 @@
         <button id="sharePlan">🔗 Share</button>
         <button id="resetPlan">🔄 Reset</button>
         <button id="printPlan">🖨️ Print</button>
-        <button id="exportPlan">📤 Export</button>
+        <button id="exportPlan">📤 Export JSON</button>
+        <button id="exportList" class="success">📋 Export List</button>
         <button id="clearTimetable" class="warning">🗑️ Clear All</button>
         
         <div class="control-group">
@@ -1255,7 +1262,7 @@
                     { number: 1, weeks: 10, startWeek: 1, name: "Safety, Foundations & Summer Harvest" },
                     { number: 2, weeks: 10, startWeek: 11, name: "Practical Skills & Application" },
                     { number: 3, weeks: 10, startWeek: 21, name: "Machinery & Advanced Integration" },
-                    { number: 4, weeks: 7, startWeek: 31, name: "Apex & Finalisation" }
+                    { number: 4, weeks: 7, startWeek: 31, name: "Apex Units & Finalisation" }
                 ],
                 projectMilestones: [
                     { id: 'milestone-1', week: 18, label: "Project Start" },
@@ -1628,7 +1635,7 @@
                     { number: 1, weeks: 10, startWeek: 1, name: "Safety, Foundations & Summer Harvest" },
                     { number: 2, weeks: 10, startWeek: 11, name: "Practical Skills & Application" },
                     { number: 3, weeks: 10, startWeek: 21, name: "Machinery & Advanced Integration" },
-                    { number: 4, weeks: 7, startWeek: 31, name: "Apex & Finalisation" }
+                    { number: 4, weeks: 7, startWeek: 31, name: "Apex Units & Finalisation" }
                 ],
                 projectMilestones: [
                     { id: 'milestone-1', week: 18, label: "Project Start" },
@@ -1776,7 +1783,7 @@
                     { id: 'core', label: 'Core Units (Main Teacher)' },
                     { id: 'specialist', label: 'Specialist Units (Other Teacher)' },
                     { id: 'project', label: 'Integrated Project' },
-                    { id: 'apex', label: 'Apex & Assessment' }
+                    { id: 'apex', label: 'Apex Units & Assessment' }
                 ];
             }
 
@@ -2159,6 +2166,10 @@
             const exportPlanBtn = document.getElementById('exportPlan');
             if (exportPlanBtn) exportPlanBtn.addEventListener('click', () => this.exportPlan());
             
+            // NEW: List export button
+            const exportListBtn = document.getElementById('exportList');
+            if (exportListBtn) exportListBtn.addEventListener('click', () => this.exportAsList());
+            
             const applyBlockingBtn = document.getElementById('applyBlocking');
             if (applyBlockingBtn) applyBlockingBtn.addEventListener('click', () => this.applyWeekBlocking());
             
@@ -2316,6 +2327,18 @@
             const printStudentBtn = document.getElementById('printStudentView');
             if (printStudentBtn) {
                 printStudentBtn.addEventListener('click', () => this.printStudentView());
+            }
+            
+            // Export CSV from share panel
+            const exportCSVBtn = document.getElementById('exportCSV');
+            if (exportCSVBtn) {
+                exportCSVBtn.addEventListener('click', () => this.exportAsList());
+            }
+            
+            // Export Text List from share panel
+            const exportTextListBtn = document.getElementById('exportTextList');
+            if (exportTextListBtn) {
+                exportTextListBtn.addEventListener('click', () => this.generatePlainTextList());
             }
         }
 
@@ -3124,6 +3147,231 @@
             this.printFullSchedule();
         }
 
+        // ========== NEW: EXPORT AS LIST/CSV ==========
+        exportAsList() {
+            if (this.isStudentView) return;
+            
+            // Generate CSV content
+            let csvContent = "Week,Term,Unit Code,Unit Name,Teacher,Duration,Type,Tags,Notes\n";
+            
+            // Sort units by starting week
+            const sortedUnits = [...this.units].sort((a, b) => {
+                const aStart = Math.min(...a.weeks);
+                const bStart = Math.min(...b.weeks);
+                return aStart - bStart;
+            });
+            
+            // Process each unit
+            sortedUnits.forEach(unit => {
+                const startWeek = Math.min(...unit.weeks);
+                const endWeek = Math.max(...unit.weeks);
+                const duration = unit.weeks.length;
+                const term = this.getTermForWeek(startWeek);
+                const termText = term ? `Term ${term.number}` : 'N/A';
+                
+                // Escape CSV special characters
+                const escapeCSV = (str) => {
+                    if (str == null) return '';
+                    return `"${String(str).replace(/"/g, '""')}"`;
+                };
+                
+                csvContent += [
+                    `${startWeek}-${endWeek}`,
+                    termText,
+                    escapeCSV(unit.code),
+                    escapeCSV(unit.name),
+                    unit.teacher === 'other' ? 'Other Teacher' : 'Main Teacher',
+                    duration + ' week' + (duration > 1 ? 's' : ''),
+                    escapeCSV(unit.color),
+                    escapeCSV(unit.tags?.join(', ')),
+                    escapeCSV(unit.notes)
+                ].join(',') + '\n';
+            });
+            
+            // Add blocked weeks section
+            csvContent += "\n\nBLOCKED WEEKS\nWeek,Type,Label\n";
+            Object.entries(this.blockedWeeks).forEach(([week, data]) => {
+                csvContent += `${week},${data.type},${this.blockingLabels[data.type] || 'Blocked'}\n`;
+            });
+            
+            // Add project milestones section
+            csvContent += "\n\nPROJECT MILESTONES\nWeek,Milestone\n";
+            this.courseData.projectMilestones.forEach(milestone => {
+                csvContent += `${milestone.week},${milestone.label}\n`;
+            });
+            
+            // Add summary
+            csvContent += `\n\nSUMMARY\nTotal Weeks:,${this.courseData.totalWeeks}\n`;
+            csvContent += `Total Units:,${this.units.length}\n`;
+            csvContent += `Generated:,${new Date().toLocaleString()}\n`;
+            
+            // Create and trigger download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `course-schedule-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            this.showToast('Schedule exported as CSV', 'success');
+            
+            // Also create a plain text version for better readability
+            setTimeout(() => {
+                this.generatePlainTextList();
+            }, 500);
+        }
+
+        // ========== NEW: PLAIN TEXT LIST ==========
+        generatePlainTextList() {
+            let textContent = `COURSE SCHEDULE - CERTIFICATE III CONSERVATION & ECOSYSTEM MANAGEMENT\n`;
+            textContent += `Generated: ${new Date().toLocaleString()}\n`;
+            textContent += `Total Weeks: ${this.courseData.totalWeeks} | Total Units: ${this.units.length}\n`;
+            textContent += '='.repeat(80) + '\n\n';
+            
+            // Group by term
+            this.courseData.terms.forEach(term => {
+                textContent += `TERM ${term.number}: ${term.name}\n`;
+                textContent += `Weeks ${term.startWeek} to ${term.startWeek + term.weeks - 1} (${term.weeks} weeks)\n`;
+                textContent += '-'.repeat(80) + '\n\n';
+                
+                // Get units in this term
+                const termUnits = this.units.filter(unit => {
+                    const weeks = unit.weeks;
+                    return weeks.some(week => 
+                        week >= term.startWeek && week < term.startWeek + term.weeks
+                    );
+                });
+                
+                // Remove duplicates by code
+                const uniqueUnits = [];
+                const seenCodes = new Set();
+                termUnits.forEach(unit => {
+                    if (!seenCodes.has(unit.code)) {
+                        seenCodes.add(unit.code);
+                        uniqueUnits.push(unit);
+                    }
+                });
+                
+                // Sort units by starting week
+                uniqueUnits.sort((a, b) => {
+                    const aStart = Math.min(...a.weeks);
+                    const bStart = Math.min(...b.weeks);
+                    return aStart - bStart;
+                });
+                
+                if (uniqueUnits.length === 0) {
+                    textContent += "No units scheduled for this term\n\n";
+                } else {
+                    uniqueUnits.forEach(unit => {
+                        const startWeek = Math.min(...unit.weeks);
+                        const endWeek = Math.max(...unit.weeks);
+                        const duration = unit.weeks.length;
+                        
+                        textContent += `• ${unit.code}: ${unit.name}\n`;
+                        textContent += `  Weeks: ${startWeek}-${endWeek} (${duration} week${duration > 1 ? 's' : ''})\n`;
+                        textContent += `  Teacher: ${unit.teacher === 'other' ? 'Other Teacher' : 'Main Teacher'}\n`;
+                        if (unit.tags && unit.tags.length > 0) {
+                            textContent += `  Tags: ${unit.tags.join(', ')}\n`;
+                        }
+                        if (unit.notes) {
+                            textContent += `  Notes: ${unit.notes}\n`;
+                        }
+                        textContent += '\n';
+                    });
+                }
+                
+                // Add blocked weeks in this term
+                const blockedInTerm = Object.keys(this.blockedWeeks)
+                    .filter(week => {
+                        const weekNum = parseInt(week);
+                        return weekNum >= term.startWeek && weekNum < term.startWeek + term.weeks;
+                    })
+                    .map(week => ({ week, data: this.blockedWeeks[week] }));
+                
+                if (blockedInTerm.length > 0) {
+                    textContent += 'BLOCKED/BREAK WEEKS:\n';
+                    blockedInTerm.forEach(({ week, data }) => {
+                        textContent += `  Week ${week}: ${this.blockingLabels[data.type] || 'Blocked'}\n`;
+                    });
+                    textContent += '\n';
+                }
+                textContent += '\n';
+            });
+            
+            // Add project milestones
+            if (this.courseData.projectMilestones.length > 0) {
+                textContent += 'PROJECT MILESTONES:\n';
+                textContent += '-'.repeat(80) + '\n';
+                this.courseData.projectMilestones.forEach(milestone => {
+                    const term = this.getTermForWeek(milestone.week);
+                    const termText = term ? `(Term ${term.number})` : '';
+                    textContent += `Week ${milestone.week} ${termText}: ${milestone.label}\n`;
+                });
+                textContent += '\n';
+            }
+            
+            // Add week-by-week breakdown
+            textContent += 'WEEK-BY-WEEK BREAKDOWN:\n';
+            textContent += '='.repeat(80) + '\n';
+            
+            for (let week = 1; week <= this.courseData.totalWeeks; week++) {
+                const term = this.getTermForWeek(week);
+                const isBlocked = this.blockedWeeks[week];
+                const unitsThisWeek = this.units.filter(unit => unit.weeks.includes(week));
+                const projectMilestone = this.courseData.projectMilestones.find(m => m.week === week);
+                
+                textContent += `Week ${week}`;
+                if (term) textContent += ` (Term ${term.number})`;
+                textContent += ':\n';
+                
+                if (isBlocked) {
+                    textContent += `  [${this.blockingLabels[isBlocked.type] || 'BLOCKED'}]\n`;
+                } else if (unitsThisWeek.length === 0) {
+                    textContent += `  No scheduled units\n`;
+                } else {
+                    // Group by teacher
+                    const mainTeacherUnits = unitsThisWeek.filter(u => u.teacher === 'main');
+                    const otherTeacherUnits = unitsThisWeek.filter(u => u.teacher === 'other');
+                    
+                    if (mainTeacherUnits.length > 0) {
+                        textContent += `  Main Teacher:\n`;
+                        mainTeacherUnits.forEach(unit => {
+                            textContent += `    - ${unit.code}: ${unit.name}\n`;
+                        });
+                    }
+                    
+                    if (otherTeacherUnits.length > 0) {
+                        textContent += `  Other Teacher:\n`;
+                        otherTeacherUnits.forEach(unit => {
+                            textContent += `    - ${unit.code}: ${unit.name}\n`;
+                        });
+                    }
+                }
+                
+                if (projectMilestone) {
+                    textContent += `  Project: ${projectMilestone.label}\n`;
+                }
+                
+                textContent += '\n';
+            }
+            
+            // Create and trigger download
+            const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `course-schedule-details-${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            this.showToast('Detailed schedule exported as text file', 'success');
+        }
+
         // ========== RESET OPERATIONS ==========
         resetToDefault() {
             if (confirm('Reset to default course sequence? Any unsaved changes will be lost.')) {
@@ -3627,6 +3875,12 @@
                         case 'p':
                             e.preventDefault();
                             this.printFullSchedule();
+                            break;
+                        case 'l':
+                            if (!this.isStudentView) {
+                                e.preventDefault();
+                                this.exportAsList();
+                            }
                             break;
                     }
                 }
