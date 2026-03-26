@@ -1,5 +1,3 @@
-I think i have errors in this code and it doesn't run. I also need to complete adding null checks for all other buttons but I'm not sure how. Can you please help me fix this?
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1160,7 +1158,7 @@ I think i have errors in this code and it doesn't run. I also need to complete a
             </div>
         </div>
         
-        <!-- Project Marker Controls (removed Integrated Project row) -->
+        <!-- Project Marker Controls -->
         <div class="control-group">
             <label>Project Milestones</label>
             <div class="project-marker-controls">
@@ -1334,8 +1332,8 @@ I think i have errors in this code and it doesn't run. I also need to complete a
                     </select>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button onclick="window.app.addCustomTileFromModal()" class="primary" style="flex: 1;">Add Tile</button>
-                    <button onclick="document.getElementById('customTileModal').style.display = 'none'" style="flex: 1;">Cancel</button>
+                    <button id="addTileFromModal" class="primary" style="flex: 1;">Add Tile</button>
+                    <button id="closeCustomTileModal" style="flex: 1;">Cancel</button>
                 </div>
             </div>
         </div>
@@ -1641,33 +1639,34 @@ class CoursePlanner {
         this.init();
     }
 
-init() {
-    console.log('Initializing CoursePlanner...');
+    init() {
+        console.log('Initializing CoursePlanner...');
+        
+        // Load data first
+        this.loadInitialData();
+        
+        // Set up event listeners
+        this.setupEventListeners();
+        
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                this.renderEverything();
+                this.setupStudentViewIfNeeded();
+                this.hideLoadingScreen();
+                this.setupKeyboardShortcuts();
+            });
+        } else {
+            // Use setTimeout to ensure DOM is fully processed
+            setTimeout(() => {
+                this.renderEverything();
+                this.setupStudentViewIfNeeded();
+                this.hideLoadingScreen();
+                this.setupKeyboardShortcuts();
+            }, 100);
+        }
+    }    
     
-    // Load data first
-    this.loadInitialData();
-    
-    // Set up event listeners
-    this.setupEventListeners();
-    
-    // Wait for DOM to be ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            this.renderEverything();
-            this.setupStudentViewIfNeeded();
-            this.hideLoadingScreen();
-            this.setupKeyboardShortcuts();
-        });
-    } else {
-        // Use setTimeout to ensure DOM is fully processed
-        setTimeout(() => {
-            this.renderEverything();
-            this.setupStudentViewIfNeeded();
-            this.hideLoadingScreen();
-            this.setupKeyboardShortcuts();
-        }, 100);
-    }
-}    
     // ========== CRITICAL FIX: LOAD DATA FROM MULTIPLE SOURCES ==========
     loadInitialData() {
         try {
@@ -1836,12 +1835,12 @@ init() {
         }
     }
 
-renderTimeline() {
-    const container = document.getElementById('timelineContent');
-    if (!container) {
-        console.warn('Timeline container not found');
-        return;
-    }
+    renderTimeline() {
+        const container = document.getElementById('timelineContent');
+        if (!container) {
+            console.warn('Timeline container not found');
+            return;
+        }
 
         const { totalWeeks, terms } = this.courseData;
         const weekWidth = this.isStudentView ? 120 : 150;
@@ -1890,7 +1889,7 @@ renderTimeline() {
         // Timeline grid
         html += `<div class="timeline-grid">`;
 
-        // Determine swimlanes based on view mode (removed Integrated Project row)
+        // Determine swimlanes based on view mode
         let swimlanes = [];
         const viewMode = this.isStudentView ? 'week' : (document.getElementById('viewMode')?.value || 'week');
         
@@ -1909,7 +1908,7 @@ renderTimeline() {
                 });
             });
         } else {
-            // Default week view - removed Integrated Project lane
+            // Default week view
             swimlanes = [
                 { id: 'core', label: 'Core Units (Main Teacher)' },
                 { id: 'specialist', label: 'Specialist Units (Other Teacher)' },
@@ -1960,9 +1959,6 @@ renderTimeline() {
                         html += this.renderCustomTile(tile);
                     });
                 }
-                
-                // Render project markers as separate elements (they are absolutely positioned)
-                // They will be added after the lane content is rendered
 
                 if (unitsInWeek.length === 0 && customTilesInWeek.length === 0 && !isBlocked) {
                     html += `<div class="empty-slot">${this.isStudentView ? 'No items' : 'Drag unit or click + to add tile'}</div>`;
@@ -1977,7 +1973,7 @@ renderTimeline() {
         html += `</div>`;
         container.innerHTML = html;
 
-        // Add project markers to the custom lane (renamed from project lane)
+        // Add project markers to the custom lane
         this.renderProjectMarkers();
 
         // Add event listeners
@@ -1985,7 +1981,8 @@ renderTimeline() {
         
         // Add term click handlers
         if (!this.isStudentView) {
-            container.querySelectorAll('.term-header').forEach(header => {
+            const termHeaders = container.querySelectorAll('.term-header');
+            termHeaders.forEach(header => {
                 header.addEventListener('click', (e) => {
                     const termNumber = parseInt(e.currentTarget.dataset.term);
                     this.openTermModal(termNumber);
@@ -2033,8 +2030,7 @@ renderTimeline() {
         
         return `
             <div class="unit-block ${assessmentClass}" data-tile-id="${tile.id}" data-week="${tile.week}"
-                 style="background: ${tileColor}; border-left-color: ${this.darkenColor(tileColor, 30)}; cursor: pointer;"
-                 onclick="window.app.showCustomTileDetails('${tile.id}')">
+                 style="background: ${tileColor}; border-left-color: ${this.darkenColor(tileColor, 30)}; cursor: pointer;">
                 <div class="unit-code">${tile.title}</div>
                 <div class="unit-name">${tile.description ? tile.description.substring(0, 30) : ''}${tile.description && tile.description.length > 30 ? '...' : ''}</div>
                 ${isAssessment ? `<div class="assessment-badge">📝 DUE DATE</div>` : ''}
@@ -2294,21 +2290,35 @@ renderTimeline() {
         const modal = document.getElementById('customTileModal');
         if (modal) {
             // Reset form
-            document.getElementById('customTileWeek').value = '';
-            document.getElementById('customTileTitle').value = '';
-            document.getElementById('customTileDescription').value = '';
-            document.getElementById('customTileColor').value = '#f39c12';
-            document.getElementById('customTileType').value = 'custom';
+            const weekInput = document.getElementById('customTileWeek');
+            const titleInput = document.getElementById('customTileTitle');
+            const descInput = document.getElementById('customTileDescription');
+            const colorInput = document.getElementById('customTileColor');
+            const typeSelect = document.getElementById('customTileType');
+            
+            if (weekInput) weekInput.value = '';
+            if (titleInput) titleInput.value = '';
+            if (descInput) descInput.value = '';
+            if (colorInput) colorInput.value = '#f39c12';
+            if (typeSelect) typeSelect.value = 'custom';
             modal.style.display = 'flex';
         }
     }
 
     addCustomTileFromModal() {
-        const week = parseInt(document.getElementById('customTileWeek').value);
-        const title = document.getElementById('customTileTitle').value;
-        const description = document.getElementById('customTileDescription').value;
-        const color = document.getElementById('customTileColor').value;
-        const type = document.getElementById('customTileType').value;
+        const weekInput = document.getElementById('customTileWeek');
+        const titleInput = document.getElementById('customTileTitle');
+        const descInput = document.getElementById('customTileDescription');
+        const colorInput = document.getElementById('customTileColor');
+        const typeSelect = document.getElementById('customTileType');
+        
+        if (!weekInput || !titleInput) return;
+        
+        const week = parseInt(weekInput.value);
+        const title = titleInput.value;
+        const description = descInput ? descInput.value : '';
+        const color = colorInput ? colorInput.value : '#f39c12';
+        const type = typeSelect ? typeSelect.value : 'custom';
         
         if (!week || isNaN(week) || week < 1 || week > this.courseData.totalWeeks) {
             this.showToast('Please enter a valid week number', 'error');
@@ -2334,7 +2344,9 @@ renderTimeline() {
         
         this.customTiles.push(newTile);
         this.renderEverything();
-        document.getElementById('customTileModal').style.display = 'none';
+        
+        const modal = document.getElementById('customTileModal');
+        if (modal) modal.style.display = 'none';
         this.showToast(`${type === 'assessment' ? 'Assessment task' : 'Custom tile'} added for Week ${week}`, 'success');
         this.showSyncNotification('Tile added');
     }
@@ -2401,6 +2413,8 @@ renderTimeline() {
         const modalBody = document.getElementById('modalBody');
         const modalTitle = document.getElementById('modalTitle');
         
+        if (!modal || !modalBody || !modalTitle) return;
+        
         modalTitle.textContent = tile.type === 'assessment' ? '📝 Assessment Task' : '🎨 Custom Tile';
         
         modalBody.innerHTML = `
@@ -2439,49 +2453,49 @@ renderTimeline() {
     }
 
     // ========== EVENT LISTENERS ==========
-setupEventListeners() {
-    // View mode changes
-    const viewModeSelect = document.getElementById('viewMode');
-    if (viewModeSelect && !this.isStudentView) {
-        viewModeSelect.addEventListener('change', (e) => {
-            this.currentView = e.target.value;
-            this.renderTimeline();
-        });
-    }
+    setupEventListeners() {
+        // View mode changes
+        const viewModeSelect = document.getElementById('viewMode');
+        if (viewModeSelect && !this.isStudentView) {
+            viewModeSelect.addEventListener('change', (e) => {
+                this.currentView = e.target.value;
+                this.renderTimeline();
+            });
+        }
 
-    // Highlight mode - add null check
-    const highlightMode = document.getElementById('highlightMode');
-    if (highlightMode) {
-        highlightMode.addEventListener('change', (e) => {
-            this.applyHighlighting(e.target.value);
-        });
-    }
+        // Highlight mode - add null check
+        const highlightMode = document.getElementById('highlightMode');
+        if (highlightMode) {
+            highlightMode.addEventListener('change', (e) => {
+                this.applyHighlighting(e.target.value);
+            });
+        }
 
-    // Control buttons - add null checks for all
-    const savePlanBtn = document.getElementById('savePlan');
-    if (savePlanBtn) savePlanBtn.addEventListener('click', () => this.savePlan());
-    
-    const sharePlanBtn = document.getElementById('sharePlan');
-    if (sharePlanBtn) sharePlanBtn.addEventListener('click', () => this.sharePlan());
-    
-    const resetPlanBtn = document.getElementById('resetPlan');
-    if (resetPlanBtn) resetPlanBtn.addEventListener('click', () => this.resetToDefault());
-    
-    const clearTimetableBtn = document.getElementById('clearTimetable');
-    if (clearTimetableBtn) clearTimetableBtn.addEventListener('click', () => this.clearTimetable());
-    
-    const printPlanBtn = document.getElementById('printPlan');
-    if (printPlanBtn) printPlanBtn.addEventListener('click', () => this.printBasic());
-    
-    const exportPlanBtn = document.getElementById('exportPlan');
-    if (exportPlanBtn) exportPlanBtn.addEventListener('click', () => this.exportPlan());
-    
-    const exportListBtn = document.getElementById('exportList');
-    if (exportListBtn) exportListBtn.addEventListener('click', () => this.exportAsList());
-    
-    const applyBlockingBtn = document.getElementById('applyBlocking');
-    if (applyBlockingBtn) applyBlockingBtn.addEventListener('click', () => this.applyWeekBlocking());
-     
+        // Control buttons - add null checks for all
+        const savePlanBtn = document.getElementById('savePlan');
+        if (savePlanBtn) savePlanBtn.addEventListener('click', () => this.savePlan());
+        
+        const sharePlanBtn = document.getElementById('sharePlan');
+        if (sharePlanBtn) sharePlanBtn.addEventListener('click', () => this.sharePlan());
+        
+        const resetPlanBtn = document.getElementById('resetPlan');
+        if (resetPlanBtn) resetPlanBtn.addEventListener('click', () => this.resetToDefault());
+        
+        const clearTimetableBtn = document.getElementById('clearTimetable');
+        if (clearTimetableBtn) clearTimetableBtn.addEventListener('click', () => this.clearTimetable());
+        
+        const printPlanBtn = document.getElementById('printPlan');
+        if (printPlanBtn) printPlanBtn.addEventListener('click', () => this.printBasic());
+        
+        const exportPlanBtn = document.getElementById('exportPlan');
+        if (exportPlanBtn) exportPlanBtn.addEventListener('click', () => this.exportPlan());
+        
+        const exportListBtn = document.getElementById('exportList');
+        if (exportListBtn) exportListBtn.addEventListener('click', () => this.exportAsList());
+        
+        const applyBlockingBtn = document.getElementById('applyBlocking');
+        if (applyBlockingBtn) applyBlockingBtn.addEventListener('click', () => this.applyWeekBlocking());
+         
         // Week management
         const addWeekBtn = document.getElementById('addWeekBtn');
         if (addWeekBtn) addWeekBtn.addEventListener('click', () => this.addWeek());
@@ -2530,20 +2544,37 @@ setupEventListeners() {
         }
         
         // Modal close buttons
-        document.querySelectorAll('.close-modal').forEach(btn => {
+        const closeModalBtns = document.querySelectorAll('.close-modal');
+        closeModalBtns.forEach(btn => {
             btn.addEventListener('click', function() {
                 const modal = this.closest('.modal');
                 if (modal) modal.style.display = 'none';
             });
         });
         
-        document.querySelectorAll('.modal').forEach(modal => {
+        // Modal background clicks
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     modal.style.display = 'none';
                 }
             });
         });
+        
+        // Custom tile modal buttons
+        const addTileFromModalBtn = document.getElementById('addTileFromModal');
+        if (addTileFromModalBtn) {
+            addTileFromModalBtn.addEventListener('click', () => this.addCustomTileFromModal());
+        }
+        
+        const closeCustomTileModalBtn = document.getElementById('closeCustomTileModal');
+        if (closeCustomTileModalBtn) {
+            closeCustomTileModalBtn.addEventListener('click', () => {
+                const modal = document.getElementById('customTileModal');
+                if (modal) modal.style.display = 'none';
+            });
+        }
         
         // Close share panel when clicking outside
         document.addEventListener('click', (e) => {
@@ -2671,7 +2702,8 @@ setupEventListeners() {
         if (!container) return;
 
         // Unit click handlers for student view
-        container.querySelectorAll('.unit-block').forEach(block => {
+        const unitBlocks = container.querySelectorAll('.unit-block');
+        unitBlocks.forEach(block => {
             block.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const unitId = block.dataset.unitId;
@@ -2713,7 +2745,8 @@ setupEventListeners() {
 
         // Week slot drop zones for editor view
         if (!this.isStudentView) {
-            container.querySelectorAll('.week-slot').forEach(slot => {
+            const weekSlots = container.querySelectorAll('.week-slot');
+            weekSlots.forEach(slot => {
                 slot.addEventListener('dragover', (e) => {
                     e.preventDefault();
                     slot.style.background = 'rgba(9, 132, 227, 0.1)';
@@ -2868,6 +2901,8 @@ setupEventListeners() {
         const modalBody = document.getElementById('modalBody');
         const modalTitle = document.getElementById('modalTitle');
 
+        if (!modal || !modalBody || !modalTitle) return;
+        
         modalTitle.textContent = `Project Milestone: ${milestone.label}`;
         
         modalBody.innerHTML = `
@@ -2899,6 +2934,8 @@ setupEventListeners() {
         const modal = document.getElementById('unitModal');
         const modalBody = document.getElementById('modalBody');
         const modalTitle = document.getElementById('modalTitle');
+
+        if (!modal || !modalBody || !modalTitle) return;
 
         modalTitle.textContent = `Edit Unit: ${unit.code}`;
         
@@ -2960,12 +2997,29 @@ setupEventListeners() {
                 </div>
                 
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button class="primary" onclick="window.app.saveUnitChanges('${unitId}')" style="flex: 1;">Save Changes</button>
-                    <button class="warning" onclick="window.app.deleteUnit('${unitId}')" style="flex: 1;">Delete Unit</button>
-                    <button onclick="document.getElementById('unitModal').style.display = 'none'" style="flex: 1;">Cancel</button>
+                    <button id="saveUnitChangesBtn" class="primary" style="flex: 1;">Save Changes</button>
+                    <button id="deleteUnitBtn" class="warning" style="flex: 1;">Delete Unit</button>
+                    <button id="closeUnitModalBtn" style="flex: 1;">Cancel</button>
                 </div>
             </div>
         `;
+
+        // Add event listeners for the buttons
+        const saveBtn = document.getElementById('saveUnitChangesBtn');
+        const deleteBtn = document.getElementById('deleteUnitBtn');
+        const closeBtn = document.getElementById('closeUnitModalBtn');
+        
+        if (saveBtn) {
+            saveBtn.onclick = () => this.saveUnitChanges(unitId);
+        }
+        if (deleteBtn) {
+            deleteBtn.onclick = () => this.deleteUnit(unitId);
+        }
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                if (modal) modal.style.display = 'none';
+            };
+        }
 
         modal.style.display = 'flex';
     }
@@ -2977,22 +3031,36 @@ setupEventListeners() {
         this.saveHistory();
         
         const unit = this.units[unitIndex];
-        unit.code = document.getElementById('editUnitCode').value;
-        unit.name = document.getElementById('editUnitName').value;
         
-        const weeksInput = document.getElementById('editUnitWeeks').value;
-        unit.weeks = this.parseWeeksInput(weeksInput);
+        const codeInput = document.getElementById('editUnitCode');
+        const nameInput = document.getElementById('editUnitName');
+        const weeksInput = document.getElementById('editUnitWeeks');
+        const colorSelect = document.getElementById('editUnitColor');
+        const teacherSelect = document.getElementById('editUnitTeacher');
+        const tagsInput = document.getElementById('editUnitTags');
+        const notesInput = document.getElementById('editUnitNotes');
+        const isAssessmentCheckbox = document.getElementById('editUnitIsAssessment');
         
-        unit.color = document.getElementById('editUnitColor').value;
-        unit.teacher = document.getElementById('editUnitTeacher').value;
+        if (codeInput) unit.code = codeInput.value;
+        if (nameInput) unit.name = nameInput.value;
         
-        const tagsInput = document.getElementById('editUnitTags').value;
-        unit.tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+        if (weeksInput) {
+            unit.weeks = this.parseWeeksInput(weeksInput.value);
+        }
         
-        unit.notes = document.getElementById('editUnitNotes').value;
-        unit.isAssessment = document.getElementById('editUnitIsAssessment').checked;
+        if (colorSelect) unit.color = colorSelect.value;
+        if (teacherSelect) unit.teacher = teacherSelect.value;
+        
+        if (tagsInput) {
+            const tagsValue = tagsInput.value;
+            unit.tags = tagsValue.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+        }
+        
+        if (notesInput) unit.notes = notesInput.value;
+        if (isAssessmentCheckbox) unit.isAssessment = isAssessmentCheckbox.checked;
 
-        document.getElementById('unitModal').style.display = 'none';
+        const modal = document.getElementById('unitModal');
+        if (modal) modal.style.display = 'none';
         this.renderEverything();
         this.showToast('Unit updated successfully', 'success');
         this.showSyncNotification('Unit updated');
@@ -3018,7 +3086,8 @@ setupEventListeners() {
         if (confirm('Are you sure you want to delete this unit?')) {
             this.saveHistory();
             this.units = this.units.filter(u => u.id !== unitId);
-            document.getElementById('unitModal').style.display = 'none';
+            const modal = document.getElementById('unitModal');
+            if (modal) modal.style.display = 'none';
             this.renderEverything();
             this.showToast('Unit deleted', 'success');
             this.showSyncNotification('Unit deleted');
@@ -3093,6 +3162,8 @@ setupEventListeners() {
         const modalBody = document.getElementById('modalBody');
         const modalTitle = document.getElementById('modalTitle');
 
+        if (!modal || !modalBody || !modalTitle) return;
+
         modalTitle.textContent = `${unit.code} - ${unit.name}`;
         
         const weeks = unit.weeks;
@@ -3139,25 +3210,31 @@ setupEventListeners() {
                     </div>
                 ` : ''}
                 
-                <button onclick="document.getElementById('unitModal').style.display = 'none'" 
-                        style="width: 100%; padding: 10px; background: #0984e3; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                <button id="closeStudentUnitModal" style="width: 100%; padding: 10px; background: #0984e3; color: white; border: none; border-radius: 6px; cursor: pointer;">
                     Close
                 </button>
             </div>
         `;
 
+        const closeBtn = document.getElementById('closeStudentUnitModal');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                if (modal) modal.style.display = 'none';
+            };
+        }
+
         modal.style.display = 'flex';
     }
 
     // ========== UNIT PALETTE ==========
-renderUnitPalette() {
-    if (this.isStudentView) return;
-    
-    const container = document.getElementById('unitPalette');
-    if (!container) {
-        console.warn('Unit palette container not found');
-        return;
-    }
+    renderUnitPalette() {
+        if (this.isStudentView) return;
+        
+        const container = document.getElementById('unitPalette');
+        if (!container) {
+            console.warn('Unit palette container not found');
+            return;
+        }
 
         container.innerHTML = this.unitTemplates.map(template => `
             <div class="unit-item" draggable="true" data-template='${JSON.stringify(template)}'
@@ -3175,7 +3252,8 @@ renderUnitPalette() {
         `).join('');
 
         // Add drag event listeners
-        container.querySelectorAll('.unit-item').forEach(item => {
+        const unitItems = container.querySelectorAll('.unit-item');
+        unitItems.forEach(item => {
             item.addEventListener('dragstart', (e) => {
                 const template = JSON.parse(e.currentTarget.dataset.template);
                 this.draggedFromPalette = true;
@@ -3348,20 +3426,22 @@ renderUnitPalette() {
         const input = document.getElementById('shareLink');
         const copyBtn = document.getElementById('copyShareLink');
         
-        input.value = shareUrl;
-        panel.classList.add('show');
-        
-        copyBtn.onclick = () => {
-            input.select();
-            input.setSelectionRange(0, 99999);
-            navigator.clipboard.writeText(input.value).then(() => {
-                this.showToast('Link copied to clipboard!', 'success');
-            }).catch(() => {
-                // Fallback for older browsers
-                document.execCommand('copy');
-                this.showToast('Link copied to clipboard!', 'success');
-            });
-        };
+        if (panel && input && copyBtn) {
+            input.value = shareUrl;
+            panel.classList.add('show');
+            
+            copyBtn.onclick = () => {
+                input.select();
+                input.setSelectionRange(0, 99999);
+                navigator.clipboard.writeText(input.value).then(() => {
+                    this.showToast('Link copied to clipboard!', 'success');
+                }).catch(() => {
+                    // Fallback for older browsers
+                    document.execCommand('copy');
+                    this.showToast('Link copied to clipboard!', 'success');
+                });
+            };
+        }
         
         this.showToast('Share link generated!', 'success');
     }
@@ -3790,22 +3870,27 @@ renderUnitPalette() {
     applyWeekBlocking() {
         if (this.isStudentView) return;
         
-        const blockingType = document.getElementById('weekBlocking').value;
-        const weekRangeInput = document.getElementById('weekRange').value;
+        const blockingType = document.getElementById('weekBlocking');
+        const weekRangeInput = document.getElementById('weekRange');
         
-        if (!blockingType || !weekRangeInput) {
+        if (!blockingType || !weekRangeInput) return;
+        
+        const blockingTypeValue = blockingType.value;
+        const weekRangeValue = weekRangeInput.value;
+        
+        if (!blockingTypeValue || !weekRangeValue) {
             this.showToast('Please select blocking type and enter week range', 'error');
             return;
         }
         
         let weeks = [];
-        if (weekRangeInput.includes('-')) {
-            const [start, end] = weekRangeInput.split('-').map(Number);
+        if (weekRangeValue.includes('-')) {
+            const [start, end] = weekRangeValue.split('-').map(Number);
             weeks = Array.from({length: end - start + 1}, (_, i) => start + i);
-        } else if (weekRangeInput.includes(',')) {
-            weeks = weekRangeInput.split(',').map(w => parseInt(w.trim())).filter(w => !isNaN(w));
+        } else if (weekRangeValue.includes(',')) {
+            weeks = weekRangeValue.split(',').map(w => parseInt(w.trim())).filter(w => !isNaN(w));
         } else {
-            weeks = [parseInt(weekRangeInput) || 1];
+            weeks = [parseInt(weekRangeValue) || 1];
         }
         
         // Validate weeks
@@ -3819,12 +3904,12 @@ renderUnitPalette() {
         this.saveHistory();
         
         weeks.forEach(week => {
-            if (blockingType === 'clear') {
+            if (blockingTypeValue === 'clear') {
                 delete this.blockedWeeks[week];
             } else {
                 this.blockedWeeks[week] = {
-                    type: blockingType,
-                    label: this.blockingLabels[blockingType]
+                    type: blockingTypeValue,
+                    label: this.blockingLabels[blockingTypeValue]
                 };
             }
         });
@@ -4135,7 +4220,7 @@ renderUnitPalette() {
         if (this.isStudentView) return;
         
         const fileInput = document.getElementById('importPlan');
-        if (!fileInput.files.length) return;
+        if (!fileInput || !fileInput.files.length) return;
         
         const file = fileInput.files[0];
         const reader = new FileReader();
@@ -4162,7 +4247,7 @@ renderUnitPalette() {
         };
         
         reader.readAsText(file);
-        fileInput.value = '';
+        if (fileInput) fileInput.value = '';
     }
 
     // ========== UTILITIES ==========
@@ -4221,26 +4306,26 @@ renderUnitPalette() {
         }
     }
 
-hideLoadingScreen() {
-    try {
-        const loading = document.getElementById('loading');
-        if (loading) {
-            loading.style.opacity = '0';
-            setTimeout(() => {
-                if (loading && loading.parentNode) {
-                    loading.style.display = 'none';
-                }
-            }, 300);
-        }
-    } catch (error) {
-        console.error('Error hiding loading screen:', error);
-        // Force hide after timeout
-        setTimeout(() => {
+    hideLoadingScreen() {
+        try {
             const loading = document.getElementById('loading');
-            if (loading) loading.style.display = 'none';
-        }, 1000);
+            if (loading) {
+                loading.style.opacity = '0';
+                setTimeout(() => {
+                    if (loading && loading.parentNode) {
+                        loading.style.display = 'none';
+                    }
+                }, 300);
+            }
+        } catch (error) {
+            console.error('Error hiding loading screen:', error);
+            // Force hide after timeout
+            setTimeout(() => {
+                const loading = document.getElementById('loading');
+                if (loading) loading.style.display = 'none';
+            }, 1000);
+        }
     }
-}
 
     darkenColor(color, percent) {
         const num = parseInt(color.replace('#', ''), 16);
@@ -4384,62 +4469,100 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         app = new CoursePlanner();
         window.app = app;
+        
+        // Add message listener for testing
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'test_data_load' && event.data.source === 'editor') {
+                console.log('=== STUDENT VIEW TEST ===');
+                console.log('Editor sent:', event.data.units, 'units,', event.data.weeks, 'weeks,', event.data.tiles, 'tiles');
+                console.log('Student has:', app.units.length, 'units,', app.courseData.totalWeeks, 'weeks,', app.customTiles.length, 'tiles');
+                
+                if (event.data.units === app.units.length && event.data.weeks === app.courseData.totalWeeks) {
+                    alert('✓ Test passed! Data is synchronized correctly.');
+                } else {
+                    alert('⚠ Test failed! Data mismatch. Check console for details.');
+                }
+            }
+        });
+        
+        // Add debug button for testing (only in editor view)
+        setTimeout(() => {
+            if (app && !app.isStudentView) {
+                const debugBtn = document.createElement('button');
+                debugBtn.textContent = '🔍 Verify Sync';
+                debugBtn.style.cssText = `
+                    position: fixed;
+                    bottom: 70px;
+                    right: 20px;
+                    padding: 10px 15px;
+                    background: #2d3436;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    z-index: 1000;
+                    font-size: 14px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                `;
+                debugBtn.onclick = () => {
+                    console.log('=== DEBUG SYNC STATUS ===');
+                    const isSynced = app.verifyDataSync();
+                    alert(isSynced ? '✓ Data is synchronized!' : '✗ Data sync issue - check console');
+                };
+                document.body.appendChild(debugBtn);
+            }
+        }, 500);
     });
 } else {
     // Use setTimeout to ensure DOM is ready
     setTimeout(() => {
         app = new CoursePlanner();
         window.app = app;
+        
+        // Add message listener for testing
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'test_data_load' && event.data.source === 'editor') {
+                console.log('=== STUDENT VIEW TEST ===');
+                console.log('Editor sent:', event.data.units, 'units,', event.data.weeks, 'weeks,', event.data.tiles, 'tiles');
+                console.log('Student has:', app.units.length, 'units,', app.courseData.totalWeeks, 'weeks,', app.customTiles.length, 'tiles');
+                
+                if (event.data.units === app.units.length && event.data.weeks === app.courseData.totalWeeks) {
+                    alert('✓ Test passed! Data is synchronized correctly.');
+                } else {
+                    alert('⚠ Test failed! Data mismatch. Check console for details.');
+                }
+            }
+        });
+        
+        // Add debug button for testing (only in editor view)
+        setTimeout(() => {
+            if (app && !app.isStudentView) {
+                const debugBtn = document.createElement('button');
+                debugBtn.textContent = '🔍 Verify Sync';
+                debugBtn.style.cssText = `
+                    position: fixed;
+                    bottom: 70px;
+                    right: 20px;
+                    padding: 10px 15px;
+                    background: #2d3436;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    z-index: 1000;
+                    font-size: 14px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                `;
+                debugBtn.onclick = () => {
+                    console.log('=== DEBUG SYNC STATUS ===');
+                    const isSynced = app.verifyDataSync();
+                    alert(isSynced ? '✓ Data is synchronized!' : '✗ Data sync issue - check console');
+                };
+                document.body.appendChild(debugBtn);
+            }
+        }, 500);
     }, 100);
 }
-    
-    // Create the app instance
-    app = new CoursePlanner();
-    window.app = app;
-    
-    // Add message listener for testing
-    window.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'test_data_load' && event.data.source === 'editor') {
-            console.log('=== STUDENT VIEW TEST ===');
-            console.log('Editor sent:', event.data.units, 'units,', event.data.weeks, 'weeks,', event.data.tiles, 'tiles');
-            console.log('Student has:', app.units.length, 'units,', app.courseData.totalWeeks, 'weeks,', app.customTiles.length, 'tiles');
-            
-            if (event.data.units === app.units.length && event.data.weeks === app.courseData.totalWeeks) {
-                alert('✓ Test passed! Data is synchronized correctly.');
-            } else {
-                alert('⚠ Test failed! Data mismatch. Check console for details.');
-            }
-        }
-    });
-    
-    // Add debug button for testing (only in editor view)
-    setTimeout(() => {
-        if (app && !app.isStudentView) {
-            const debugBtn = document.createElement('button');
-            debugBtn.textContent = '🔍 Verify Sync';
-            debugBtn.style.cssText = `
-                position: fixed;
-                bottom: 70px;
-                right: 20px;
-                padding: 10px 15px;
-                background: #2d3436;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                z-index: 1000;
-                font-size: 14px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            `;
-            debugBtn.onclick = () => {
-                console.log('=== DEBUG SYNC STATUS ===');
-                const isSynced = app.verifyDataSync();
-                alert(isSynced ? '✓ Data is synchronized!' : '✗ Data sync issue - check console');
-            };
-            document.body.appendChild(debugBtn);
-        }
-    }, 500);
-});
 </script>
 </body>
 </html>
