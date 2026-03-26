@@ -1,3 +1,39 @@
+You're absolutely right! The HTML is missing the import section. Here's the complete sidebar HTML that includes the import functionality. Replace your existing sidebar section (the <aside class="sidebar">...</aside> block) with this:
+
+```html
+<aside class="sidebar">
+    <h3>📚 Unit Palette</h3>
+    <div id="unitPalette"></div>
+    
+    <div style="margin-top: 30px;">
+        <h3>➕ Add Custom Unit</h3>
+        <button id="addCustomUnit" style="width: 100%; margin-top: 10px;">+ Add Custom Unit/Block</button>
+    </div>
+    
+    <div style="margin-top: 30px;">
+        <h3>💾 Saved Plans</h3>
+        <div id="savedPlans"></div>
+    </div>
+    
+    <div style="margin-top: 30px; border-top: 2px solid #e9ecef; padding-top: 15px;">
+        <h3>📤 Import / Export</h3>
+        <div style="margin-bottom: 15px;">
+            <button id="exportPlan" class="primary" style="width: 100%; margin-bottom: 8px;">📥 Export as JSON</button>
+            <button id="exportList" class="success" style="width: 100%;">📋 Export as Text List</button>
+        </div>
+        <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-top: 10px;">
+            <label style="font-weight: 600; display: block; margin-bottom: 8px; font-size: 13px;">📂 Import JSON File</label>
+            <input type="file" id="importPlan" accept=".json" style="width: 100%; margin-bottom: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <button id="importPlanBtn" style="width: 100%; background: #0984e3; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 500;">📂 Import Plan File</button>
+            <p style="font-size: 11px; color: #666; margin-top: 8px;">Select a previously exported .json file to restore your plan</p>
+        </div>
+    </div>
+</aside>
+```
+
+The full corrected HTML body (just the sidebar part replaced) would be:
+
+```html
 <body class="editor-view">
     <!-- Loading -->
     <div id="loading"><div class="loading-content"><div class="loading-spinner"></div><div class="loading-text">Loading Course Planner...</div></div></div>
@@ -49,7 +85,34 @@
 
     <!-- Workspace -->
     <div class="workspace">
-        <aside class="sidebar"><h3>📚 Unit Palette</h3><div id="unitPalette"></div><div style="margin-top:30px;"><h3>💾 Saved Plans</h3><div id="savedPlans"></div></div></aside>
+        <aside class="sidebar">
+            <h3>📚 Unit Palette</h3>
+            <div id="unitPalette"></div>
+            
+            <div style="margin-top: 30px;">
+                <h3>➕ Add Custom Unit</h3>
+                <button id="addCustomUnit" style="width: 100%; margin-top: 10px;">+ Add Custom Unit/Block</button>
+            </div>
+            
+            <div style="margin-top: 30px;">
+                <h3>💾 Saved Plans</h3>
+                <div id="savedPlans"></div>
+            </div>
+            
+            <div style="margin-top: 30px; border-top: 2px solid #e9ecef; padding-top: 15px;">
+                <h3>📤 Import / Export</h3>
+                <div style="margin-bottom: 15px;">
+                    <button id="exportPlan" class="primary" style="width: 100%; margin-bottom: 8px;">📥 Export as JSON</button>
+                    <button id="exportList" class="success" style="width: 100%;">📋 Export as Text List</button>
+                </div>
+                <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-top: 10px;">
+                    <label style="font-weight: 600; display: block; margin-bottom: 8px; font-size: 13px;">📂 Import JSON File</label>
+                    <input type="file" id="importPlan" accept=".json" style="width: 100%; margin-bottom: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <button id="importPlanBtn" style="width: 100%; background: #0984e3; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 500;">📂 Import Plan File</button>
+                    <p style="font-size: 11px; color: #666; margin-top: 8px;">Select a previously exported .json file to restore your plan</p>
+                </div>
+            </div>
+        </aside>
         <main class="timeline-container"><div id="timelineContent"></div></main>
     </div>
 
@@ -66,3 +129,22 @@
     <div id="toastsContainer"></div>
 
 <script>
+// ... your JavaScript from previous message goes here ...
+</script>
+</body>
+```
+
+What was missing:
+
+· The import file input (<input type="file" id="importPlan">)
+· The import button (<button id="importPlanBtn">)
+· The export buttons were already in your controls, but I added them to the sidebar too for convenience
+
+How to use import now:
+
+1. Look in the right sidebar
+2. Scroll to the bottom where it says "Import / Export"
+3. Click "Choose File" button
+4. Select your exported .json file
+5. Click "Import Plan File"
+6. Your plan loads instantly
