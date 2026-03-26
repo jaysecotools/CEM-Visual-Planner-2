@@ -1,7 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Mapping Tool - Cert III Conservation & Ecosystem Management</title>
+    <style>
+        /* ========== COMPLETE CSS ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        :root {
+            --color-safety: #ff6b6b;
+            --color-foundational: #4ecdc4;
+            --color-practical: #45b7d1;
+            --color-machinery: #96ceb4;
+            --color-apex: #ffeaa7;
+            --color-project: #a29bfe;
+            --color-specialist: #fd79a8;
+            --color-seasonal: #55efc4;
+            --color-holiday: #dfe6e9;
+            --color-term-break: #b2bec3;
+            --color-easter: #fab1a0;
+            --color-teacher-training: #a29bfe;
+            --color-leave: #fd79a8;
+            --color-assessment: #ff4757;
+            --week-width: 150px;
+            --student-week-width: 120px;
+            --total-weeks: 37;
+            --sidebar-width: 280px;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+            min-height: 100vh;
+        }
+
+        body.student-view {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) fixed;
+        }
+
+        body.editor-view {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) fixed;
+        }
+
+        /* Loading */
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #2d3436 0%, #0984e3 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s;
+        }
+
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #2d3436 0%, #0984e3 100%);
+            color: white;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        body.student-view .header {
+            background: linear-gradient(135deg, #0984e3 0%, #2d3436 100%);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 15px;
+        }
+
+        /* View Toggle */
+        .view-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .view-toggle button {
+            background: white;
+            border: 2px solid #0984e3;
+            color: #0984e3;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .view-toggle button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        /* Controls - Hidden in Student View */
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        body.student-view .controls {
+            display: none;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 200px;
+        }
+
+        .control-group label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3436;
+        }
+
+        select, button, input {
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            background: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        select:hover, button:hover, input:hover {
+            border-color: #0984e3;
+        }
+
+        button.primary {
+            background: #0984e3;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        button.primary:hover {
+            background: #0770c4;
+        }
+
+        button.warning {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        button.warning:hover {
+            background: #ff5252;
+        }
+
+        button.success {
+            background: #00b894;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        button.success:hover {
+            background: #00a085;
+        }
+
+        button.assessment {
+            background: #ff4757;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        button.assessment:hover {
+            background: #ff2e3a;
+        }
+
+        /* Legend - Hidden in Student View */
+        .legend {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 0 20px 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        body.student-view .legend {
+            display: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background: #f8f9fa;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        /* Workspace */
+        .workspace {
+            display: flex;
+            gap: 20px;
+            margin: 0 20px 20px;
+            min-height: 600px;
+        }
+
+        /* Sidebar - Hidden in Student View */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            overflow-y: auto;
+            max-height: 800px;
+        }
+
+        body.student-view .sidebar {
+            display: none;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 15px;
+            color: #2d3436;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f1f2f6;
+        }
+
+        /* Timeline Container */
+        .timeline-container {
+            flex: 1;
+            background: white;
+            border-radius: 10px;
+            overflow: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            position: relative;
+            min-height: 800px;
+        }
+
+        /* Term Headers */
+        .term-headers {
+            display: flex;
+            position: sticky;
+            top: 0;
+            left: 0;
+            background: white;
+            z-index: 20;
+            border-bottom: 3px solid #2d3436;
+            min-width: min-content;
+        }
+
+        .term-spacer {
+            width: 120px;
+            flex-shrink: 0;
+            background: #f8f9fa;
+            border-right: 2px solid #ddd;
+        }
+
+        .term-header {
+            flex-shrink: 0;
+            padding: 15px 10px;
+            background: #2d3436;
+            color: white;
+            text-align: center;
+            font-weight: 600;
+            border-right: 2px solid white;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .term-header:hover {
+            background: #0984e3;
+        }
+
+        /* Week Headers */
+        .week-headers {
+            display: flex;
+            position: sticky;
+            top: 53px;
+            left: 0;
+            background: white;
+            z-index: 15;
+            min-width: min-content;
+        }
+
+        .week-spacer {
+            width: 120px;
+            flex-shrink: 0;
+            background: #f8f9fa;
+            border-right: 2px solid #ddd;
+        }
+
+        .week-header {
+            width: var(--week-width);
+            flex-shrink: 0;
+            padding: 10px;
+            text-align: center;
+            background: #f8f9fa;
+            border-right: 1px solid #ddd;
+            border-bottom: 2px solid #636e72;
+            font-weight: 600;
+            position: relative;
+        }
+
+        .week-number {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        /* Timeline Grid */
+        .timeline-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: min-content;
+            position: relative;
+        }
+
+        .swimlane {
+            display: flex;
+            min-height: 120px;
+            position: relative;
+        }
+
+        .lane-label {
+            width: 120px;
+            flex-shrink: 0;
+            padding: 10px;
+            background: #f8f9fa;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 2px solid #ddd;
+            border-bottom: 1px solid #e9ecef;
+            position: sticky;
+            left: 0;
+            z-index: 5;
+        }
+
+        .lane-content {
+            display: flex;
+            flex: 1;
+            position: relative;
+        }
+
+        .week-slot {
+            width: var(--week-width);
+            flex-shrink: 0;
+            min-height: 120px;
+            border-right: 1px solid #e9ecef;
+            border-bottom: 1px solid #e9ecef;
+            padding: 5px;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .week-slot:hover {
+            background: rgba(9, 132, 227, 0.05);
+        }
+
+        .week-slot.blocked-week {
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(255, 255, 255, 0.1),
+                rgba(255, 255, 255, 0.1) 10px,
+                rgba(0, 0, 0, 0.05) 10px,
+                rgba(0, 0, 0, 0.05) 20px
+            ) !important;
+        }
+
+        /* Unit Items */
+        .unit-item {
+            background: #f8f9fa;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            cursor: grab;
+            border: 1px solid #e9ecef;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .unit-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        /* Unit Blocks */
+        .unit-block {
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            cursor: move;
+            border: 2px solid transparent;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+            min-height: 60px;
+            z-index: 2;
+        }
+
+        .unit-block:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .unit-block.dragging {
+            opacity: 0.8;
+            transform: rotate(3deg);
+        }
+
+        .unit-block.assessment-task {
+            border: 3px solid #ff4757;
+            box-shadow: 0 0 0 2px rgba(255, 71, 87, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(255, 71, 87, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
+        }
+
+        .unit-code {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .unit-name {
+            font-size: 11px;
+            margin-bottom: 6px;
+            line-height: 1.3;
+        }
+
+        .unit-duration {
+            font-size: 10px;
+            color: rgba(0,0,0,0.6);
+            position: absolute;
+            bottom: 5px;
+            right: 8px;
+            background: rgba(255,255,255,0.8);
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        .assessment-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: #ff4757;
+            color: white;
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+
+        /* Project Markers */
+        .project-marker {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: var(--color-project);
+            border-radius: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px var(--color-project), 0 2px 4px rgba(0,0,0,0.2);
+            cursor: grab;
+            transition: all 0.2s;
+        }
+
+        .project-marker:hover {
+            transform: translateY(-50%) scale(1.2);
+            box-shadow: 0 0 0 3px var(--color-project), 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .project-marker.dragging {
+            cursor: grabbing;
+            opacity: 0.8;
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .project-marker-label {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            white-space: nowrap;
+            color: #2d3436;
+            background: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            font-weight: 600;
+            min-width: 100px;
+            text-align: center;
+            z-index: 11;
+            pointer-events: none;
+        }
+
+        .project-marker-delete {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 18px;
+            height: 18px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            color: white;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 12;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .project-marker:hover .project-marker-delete {
+            opacity: 1;
+        }
+
+        .project-marker-delete:hover {
+            background: #ff5252;
+            transform: scale(1.1);
+        }
+
+        /* Empty Slot */
+        .empty-slot {
+            width: 100%;
+            height: 100%;
+            border: 2px dashed #e0e0e0;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #b2bec3;
+            font-size: 12px;
+            font-style: italic;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(0,0,0,0.02) 10px,
+                rgba(0,0,0,0.02) 20px
+            );
+        }
+
+        /* Student Term Overviews */
+        .student-term-overviews {
+            display: none;
+            margin: 20px;
+        }
+
+        body.student-view .student-term-overviews {
+            display: block;
+        }
+
+        .term-overview {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .term-overview h3 {
+            color: #2d3436;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f1f2f6;
+        }
+
+        .term-units {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .term-unit-card {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #0984e3;
+        }
+
+        .term-unit-card.assessment {
+            border-left-color: #ff4757;
+            background: #fff5f5;
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast-success {
+            background: #00b894;
+        }
+
+        .toast-error {
+            background: #ff6b6b;
+        }
+
+        .toast-info {
+            background: #0984e3;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Modals */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            color: #2d3436;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #636e72;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3436;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        /* Footer */
+        .footer {
+            background: #2d3436;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        /* Share Panel */
+        .share-panel {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            width: 350px;
+            display: none;
+        }
+
+        .share-panel.show {
+            display: block;
+        }
+
+        .share-panel h4 {
+            margin-bottom: 10px;
+            color: #2d3436;
+        }
+
+        .share-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .share-input input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+
+        /* Progress Indicator */
+        .progress-indicator {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #ddd;
+            cursor: pointer;
+        }
+
+        .progress-indicator.completed {
+            background: #00b894;
+        }
+
+        /* Sync Status */
+        .sync-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #00b894;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .sync-status.show {
+            display: flex;
+        }
+
+        /* Unit Count */
+        .unit-count {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* Week Summary */
+        .week-summary {
+            font-size: 12px;
+            margin-top: 5px;
+            color: #636e72;
+        }
+
+        /* Project Marker Controls */
+        .project-marker-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+
+        .project-marker-controls button {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .workspace {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                max-height: 400px;
+            }
+            
+            :root {
+                --week-width: 120px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+            }
+            
+            .control-group {
+                min-width: 100%;
+            }
+            
+            :root {
+                --week-width: 100px;
+            }
+            
+            .view-toggle {
+                top: 10px;
+                right: 10px;
+            }
+            
+            .view-toggle button {
+                padding: 8px 15px;
+                font-size: 14px;
+            }
+            
+            .project-marker-label {
+                font-size: 10px;
+                padding: 2px 6px;
+                min-width: 80px;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            .view-toggle,
+            .controls,
+            .legend,
+            .sidebar,
+            .share-panel,
+            .sync-status,
+            .toast {
+                display: none !important;
+            }
+            
+            .workspace {
+                margin: 0;
+            }
+            
+            .timeline-container {
+                box-shadow: none;
+                border: 1px solid #ddd;
+                overflow: visible !important;
+                width: 100% !important;
+            }
+            
+            .header {
+                background: #2d3436 !important;
+                -webkit-print-color-adjust: exact;
+            }
+            
+            .student-term-overviews {
+                display: block !important;
+                page-break-before: always;
+            }
+            
+            .term-overview {
+                page-break-inside: avoid;
+            }
+            
+            .week-slot {
+                border: 1px solid #ddd !important;
+                min-height: 100px;
+            }
+            
+            /* Ensure full timeline prints */
+            .timeline-grid {
+                overflow: visible !important;
+                width: 100% !important;
+            }
+            
+            .swimlane {
+                break-inside: avoid;
+            }
+            
+            .week-headers, .term-headers {
+                position: static !important;
+            }
+        }
+
+        /* PDF Export Specific */
+        .pdf-export-mode .timeline-container {
+            overflow: visible !important;
+            width: 100% !important;
+        }
+        
+        .pdf-export-mode .timeline-grid {
+            min-width: 100% !important;
+        }
+        
+        .pdf-export-mode .student-term-overviews {
+            display: block !important;
+        }
+    </style>
+</head>
+<body class="editor-view">
+    <!-- Loading -->
+    <div id="loading">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading Course Planner...</div>
+        </div>
+    </div>
+
+    <!-- View Toggle -->
+    <div class="view-toggle">
+        <button id="toggleView">
+            <span id="viewIcon">👁️</span>
+            <span id="viewLabel">Student View</span>
+        </button>
+    </div>
+
+    <!-- Share Panel -->
+    <div class="share-panel" id="sharePanel">
+        <h4>Share Student View</h4>
+        <div class="share-input">
+            <input type="text" id="shareLink" readonly>
+            <button id="copyShareLink" class="primary">Copy</button>
+        </div>
+        <p style="font-size: 12px; color: #636e72; margin-bottom: 10px;">
+            Share this link with students for read-only access
+        </p>
+        
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+            <h5 style="margin-bottom: 10px;">Preview & Test Options</h5>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button id="previewStudentView" class="success" style="width: 100%;">
+                    👁️ Preview Student View
+                </button>
+                <button id="openStudentViewTab" class="primary" style="width: 100%;">
+                    ↗️ Open in New Tab
+                </button>
+                <button id="testStudentView" style="width: 100%; background: #fdcb6e; color: #2d3436;">
+                    🔍 Test & Verify
+                </button>
+            </div>
+        </div>
+        
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+            <h5 style="margin-bottom: 10px;">Print & Export</h5>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button id="printFullSchedule" class="primary" style="width: 100%;">
+                    🖨️ Print Full Schedule
+                </button>
+                <button id="saveAsPDF" class="success" style="width: 100%;">
+                    📄 Save as PDF
+                </button>
+                <button id="printStudentView" style="width: 100%;">
+                    📋 Print Student View
+                </button>
+                <button id="exportCSV" style="width: 100%; background: #a29bfe; color: white;">
+                    📊 Export CSV List
+                </button>
+                <button id="exportTextList" style="width: 100%; background: #4ecdc4; color: white;">
+                    📝 Export Text List
+                </button>
+            </div>
+        </div>
+        
+        <div style="margin-top: 15px; font-size: 11px; color: #666; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+            <strong>Tip:</strong> Before sharing, make sure to save your plan. The student view will show the latest saved version.
+        </div>
+    </div>
+
+    <!-- Sync Status -->
+    <div class="sync-status" id="syncStatus">
+        <span>✓</span>
+        <span id="syncMessage">Changes saved to student view</span>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <h1 id="courseTitle">Certificate III in Conservation & Ecosystem Management</h1>
+        <div class="subtitle" id="courseSubtitle">Course Sequencing Tool | <span id="viewModeIndicator">Interactive Planner</span></div>
+        <div style="font-size: 14px; opacity: 0.8;" id="courseDescription">
+            Drag units to adjust sequence | Click units to edit details | Save/load your custom plans
+        </div>
+    </header>
+
+    <!-- Controls -->
+    <div class="controls">
+        <div class="control-group">
+            <label for="viewMode">View Mode</label>
+            <select id="viewMode">
+                <option value="week">Week View</option>
+                <option value="term">Term View</option>
+                <option value="teacher">Teacher View</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="highlightMode">Highlight</label>
+            <select id="highlightMode">
+                <option value="none">None</option>
+                <option value="specialist">Specialist Units</option>
+                <option value="safety">Safety Units</option>
+                <option value="seasonal">Seasonal Timing</option>
+                <option value="assessment">Assessment Tasks</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="weekBlocking">Block Weeks</label>
+            <select id="weekBlocking">
+                <option value="">Select action...</option>
+                <option value="easter">Mark as Easter Break</option>
+                <option value="term-break">Mark as Term Break</option>
+                <option value="training">Mark as Teacher Training</option>
+                <option value="leave">Mark as Leave</option>
+                <option value="clear">Clear Blocking</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="weekRange">Week Range</label>
+            <input type="text" id="weekRange" placeholder="e.g., 5-7 or 12,13,14">
+        </div>
+        
+        <button id="applyBlocking" class="primary">Apply Blocking</button>
+        
+        <div style="flex: 1;"></div>
+        
+        <button class="primary" id="savePlan">💾 Save Plan</button>
+        <button id="sharePlan">🔗 Share</button>
+        <button id="resetPlan">🔄 Reset</button>
+        <button id="printPlan">🖨️ Print</button>
+        <button id="exportPlan">📤 Export JSON</button>
+        <button id="exportList" class="success">📋 Export List</button>
+        <button id="clearTimetable" class="warning">🗑️ Clear All</button>
+        
+        <div class="control-group">
+            <label>Manage Weeks</label>
+            <div style="display: flex; gap: 5px; flex-direction: column;">
+                <div style="display: flex; gap: 5px;">
+                    <button id="addWeekBtn" class="success" style="flex: 1;">+ Add Week</button>
+                    <button id="removeWeekBtn" class="warning" style="flex: 1;">- Remove Week</button>
+                </div>
+                <div style="display: flex; gap: 5px;">
+                    <button id="addWeekToTermBtn" class="success" style="flex: 1;">+ To Term</button>
+                    <button id="removeWeekFromTermBtn" class="warning" style="flex: 1;">- From Term</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Assessment Task Controls -->
+        <div class="control-group">
+            <label>Assessment Tasks</label>
+            <div class="project-marker-controls">
+                <button id="addAssessmentTask" class="assessment" title="Add assessment task due date">📝 Add Assessment</button>
+                <button id="clearAssessments" class="warning" title="Clear all assessment tasks">🗑️ Clear All</button>
+            </div>
+        </div>
+        
+        <!-- Custom Tile Controls -->
+        <div class="control-group">
+            <label>Custom Tiles</label>
+            <div class="project-marker-controls">
+                <button id="addCustomTile" class="success" title="Add custom tile with custom color">🎨 Add Custom Tile</button>
+            </div>
+        </div>
+        
+        <!-- Project Marker Controls (removed Integrated Project row) -->
+        <div class="control-group">
+            <label>Project Milestones</label>
+            <div class="project-marker-controls">
+                <button id="addProjectMarker" class="success" title="Add a project milestone">+ Add Marker</button>
+                <button id="clearProjectMarkers" class="warning" title="Clear all project milestones">🗑️ Clear All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-safety);"></div>
+            <span>Safety Units</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-foundational);"></div>
+            <span>Foundational Skills</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-practical);"></div>
+            <span>Practical Application</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-machinery);"></div>
+            <span>Machinery Units</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-apex);"></div>
+            <span>Apex Units</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-specialist);"></div>
+            <span>Other Teacher</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-seasonal);"></div>
+            <span>Seasonal Timing</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-easter);"></div>
+            <span>Easter Break</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-teacher-training);"></div>
+            <span>Teacher Training</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--color-leave);"></div>
+            <span>Leave</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff4757;"></div>
+            <span>Assessment Tasks</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #a29bfe;"></div>
+            <span>Project Milestones</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #f39c12;"></div>
+            <span>Custom Tiles</span>
+        </div>
+    </div>
+
+    <!-- Workspace -->
+    <div class="workspace">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h3>📚 Unit Palette</h3>
+            <div id="unitPalette">
+                <!-- Units will be loaded here -->
+            </div>
+            
+            <div style="margin-top: 30px;">
+                <h3>➕ Add Custom Unit</h3>
+                <button id="addCustomUnit" style="width: 100%; margin-top: 10px;">+ Add Custom Unit/Block</button>
+            </div>
+            
+            <div style="margin-top: 30px;">
+                <h3>💾 Saved Plans</h3>
+                <div id="savedPlans">
+                    <!-- Saved plans will appear here -->
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px;">
+                <h3>📤 Import Plan</h3>
+                <input type="file" id="importPlan" accept=".json" style="width: 100%; margin-top: 10px;">
+                <button id="importPlanBtn" style="width: 100%; margin-top: 10px;">Import Plan File</button>
+            </div>
+        </aside>
+
+        <!-- Timeline -->
+        <main class="timeline-container">
+            <div id="timelineContent">
+                <!-- Timeline will be rendered here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Student Term Overviews -->
+    <div class="student-term-overviews" id="studentTermOverviews">
+        <!-- Will be populated for student view -->
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>Course Mapping Tool v3.0 | Designed for Cert III Conservation & Ecosystem Management | <span id="totalWeeksDisplay">37</span> Teaching Weeks</p>
+        <p style="font-size: 12px; margin-top: 10px; opacity: 0.8;">
+            Drag units to adjust sequence. Seasonal units have constraints. Click units to add notes and resources.
+        </p>
+        <div style="margin-top: 10px; font-size: 11px; color: #999;">
+            <span>Press Ctrl+Z to undo, Ctrl+Y to redo | Ctrl+S to save | Ctrl+P to print full schedule</span>
+        </div>
+    </footer>
+
+    <!-- Modals -->
+    <div class="modal" id="unitModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Edit Unit Details</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div id="modalBody">
+                <!-- Modal content will be populated -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="termModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Manage Term</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div id="termModalBody">
+                <!-- Term management will be populated -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="customTileModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Custom Tile</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div id="customTileModalBody">
+                <div class="form-group">
+                    <label>Week Number</label>
+                    <input type="number" id="customTileWeek" min="1" max="37" placeholder="Week number">
+                </div>
+                <div class="form-group">
+                    <label>Tile Title</label>
+                    <input type="text" id="customTileTitle" placeholder="e.g., Guest Speaker, Field Trip">
+                </div>
+                <div class="form-group">
+                    <label>Tile Description</label>
+                    <textarea id="customTileDescription" rows="3" placeholder="Description of this tile..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Custom Color</label>
+                    <input type="color" id="customTileColor" value="#f39c12">
+                </div>
+                <div class="form-group">
+                    <label>Tile Type</label>
+                    <select id="customTileType">
+                        <option value="custom">Custom Tile</option>
+                        <option value="assessment">Assessment Task</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button onclick="window.app.addCustomTileFromModal()" class="primary" style="flex: 1;">Add Tile</button>
+                    <button onclick="document.getElementById('customTileModal').style.display = 'none'" style="flex: 1;">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toasts Container -->
+    <div id="toastsContainer"></div>
+
+<script>
 // ========== MAIN JAVASCRIPT ==========
 // ========== CONFIGURATION ==========
 const CONFIG = {
-    APP_VERSION: '3.0.0',
+    APP_VERSION: '3.1.0',
     SHARED_STORAGE_KEY: 'course_planner_shared_data',
     DEFAULT_TOTAL_WEEKS: 37
 };
@@ -10,6 +1355,7 @@ const CONFIG = {
 class CoursePlanner {
     constructor() {
         this.units = [];
+        this.customTiles = [];
         this.courseData = {
             totalWeeks: CONFIG.DEFAULT_TOTAL_WEEKS,
             terms: [
@@ -47,7 +1393,8 @@ class CoursePlanner {
             'term-break': '#b2bec3',
             easter: '#fab1a0',
             'teacher-training': '#a29bfe',
-            leave: '#fd79a8'
+            leave: '#fd79a8',
+            assessment: '#ff4757'
         };
 
         this.blockingLabels = {
@@ -66,7 +1413,8 @@ class CoursePlanner {
                 color: 'safety',
                 tags: ['SAFETY'],
                 teacher: 'main',
-                notes: 'Non-negotiable foundation'
+                notes: 'Non-negotiable foundation',
+                isAssessment: false
             },
             {
                 id: '2',
@@ -76,7 +1424,8 @@ class CoursePlanner {
                 color: 'safety',
                 tags: ['SAFETY', 'SPECIALIST'],
                 teacher: 'other',
-                notes: 'Clustered with WHS for efficiency'
+                notes: 'Clustered with WHS for efficiency',
+                isAssessment: false
             },
             {
                 id: '3',
@@ -86,7 +1435,8 @@ class CoursePlanner {
                 color: 'seasonal',
                 tags: ['SEASONAL'],
                 teacher: 'main',
-                notes: 'Must be early due to seed season'
+                notes: 'Must be early due to seed season',
+                isAssessment: false
             },
             {
                 id: '4',
@@ -96,7 +1446,8 @@ class CoursePlanner {
                 color: 'foundational',
                 tags: [],
                 teacher: 'main',
-                notes: 'Essential for seed/plant handling'
+                notes: 'Essential for seed/plant handling',
+                isAssessment: false
             },
             {
                 id: '5',
@@ -106,7 +1457,8 @@ class CoursePlanner {
                 color: 'foundational',
                 tags: [],
                 teacher: 'main',
-                notes: 'Foundational skill - use seed collection trips'
+                notes: 'Foundational skill - use seed collection trips',
+                isAssessment: false
             },
             {
                 id: '6',
@@ -116,7 +1468,8 @@ class CoursePlanner {
                 color: 'foundational',
                 tags: [],
                 teacher: 'main',
-                notes: 'Follow-up to seed collection'
+                notes: 'Follow-up to seed collection',
+                isAssessment: false
             },
             {
                 id: '7',
@@ -126,7 +1479,8 @@ class CoursePlanner {
                 color: 'foundational',
                 tags: ['SEASONAL'],
                 teacher: 'main',
-                notes: 'Late summer/early autumn activity'
+                notes: 'Late summer/early autumn activity',
+                isAssessment: false
             },
             {
                 id: '8',
@@ -136,7 +1490,8 @@ class CoursePlanner {
                 color: 'practical',
                 tags: [],
                 teacher: 'main',
-                notes: 'Builds on plant ID'
+                notes: 'Builds on plant ID',
+                isAssessment: false
             },
             {
                 id: '9',
@@ -146,7 +1501,8 @@ class CoursePlanner {
                 color: 'practical',
                 tags: ['SPECIALIST'],
                 teacher: 'other',
-                notes: 'Clustered with weed control'
+                notes: 'Clustered with weed control',
+                isAssessment: false
             },
             {
                 id: '10',
@@ -156,7 +1512,8 @@ class CoursePlanner {
                 color: 'practical',
                 tags: ['SPECIALIST'],
                 teacher: 'other',
-                notes: 'Clustered chemical application'
+                notes: 'Clustered chemical application',
+                isAssessment: false
             },
             {
                 id: '11',
@@ -166,7 +1523,8 @@ class CoursePlanner {
                 color: 'practical',
                 tags: ['SPECIALIST'],
                 teacher: 'other',
-                notes: 'Practical vegetation management'
+                notes: 'Practical vegetation management',
+                isAssessment: false
             },
             {
                 id: '12',
@@ -176,7 +1534,8 @@ class CoursePlanner {
                 color: 'practical',
                 tags: [],
                 teacher: 'main',
-                notes: 'Ecosystem-scale application'
+                notes: 'Ecosystem-scale application',
+                isAssessment: false
             },
             {
                 id: '13',
@@ -186,7 +1545,8 @@ class CoursePlanner {
                 color: 'practical',
                 tags: ['SEASONAL'],
                 teacher: 'main',
-                notes: 'Wetter months activity'
+                notes: 'Wetter months activity',
+                isAssessment: false
             },
             {
                 id: '14',
@@ -196,7 +1556,8 @@ class CoursePlanner {
                 color: 'machinery',
                 tags: ['SPECIALIST'],
                 teacher: 'other',
-                notes: 'Requires significant planning'
+                notes: 'Requires significant planning',
+                isAssessment: false
             },
             {
                 id: '15',
@@ -206,7 +1567,8 @@ class CoursePlanner {
                 color: 'machinery',
                 tags: ['SPECIALIST'],
                 teacher: 'other',
-                notes: 'Clustered machinery units'
+                notes: 'Clustered machinery units',
+                isAssessment: false
             },
             {
                 id: '16',
@@ -216,47 +1578,41 @@ class CoursePlanner {
                 color: 'practical',
                 tags: [],
                 teacher: 'main',
-                notes: 'Enhanced capability application'
+                notes: 'Enhanced capability application',
+                isAssessment: false
             },
             {
                 id: '17',
-                code: 'INTEGRATION',
-                name: 'Skill Integration & Project Work',
-                weeks: [28, 29, 30],
-                color: 'project',
-                tags: ['FLEXIBLE'],
-                teacher: 'main',
-                notes: 'Buffer for weather/adaptation'
-            },
-            {
-                id: '18',
                 code: 'AHCECR309',
                 name: 'Conduct ecological site inspection',
                 weeks: [31, 32, 33],
                 color: 'apex',
                 tags: ['APEX'],
                 teacher: 'main',
-                notes: 'Synthesis of all skills'
+                notes: 'Synthesis of all skills',
+                isAssessment: false
             },
             {
-                id: '19',
+                id: '18',
                 code: 'PROJECT',
                 name: 'Final Project Phase',
                 weeks: [34, 35, 36],
                 color: 'project',
                 tags: [],
                 teacher: 'main',
-                notes: 'Complete integrated project'
+                notes: 'Complete integrated project',
+                isAssessment: false
             },
             {
-                id: '20',
+                id: '19',
                 code: 'ADMIN',
                 name: 'Portfolio Finalisation',
                 weeks: [37],
                 color: 'safety',
                 tags: [],
                 teacher: 'main',
-                notes: 'Verification and closure'
+                notes: 'Verification and closure',
+                isAssessment: false
             }
         ];
 
@@ -311,7 +1667,7 @@ class CoursePlanner {
             console.log('CoursePlanner initialized');
         }
     }
-        
+    
     // ========== CRITICAL FIX: LOAD DATA FROM MULTIPLE SOURCES ==========
     loadInitialData() {
         try {
@@ -340,6 +1696,16 @@ class CoursePlanner {
                 this.loadDefaultData();
             }
             
+            // Load custom tiles from separate storage
+            const customTilesData = localStorage.getItem('course_planner_custom_tiles');
+            if (customTilesData) {
+                try {
+                    this.customTiles = JSON.parse(customTilesData);
+                } catch (e) {
+                    console.error('Failed to parse custom tiles:', e);
+                }
+            }
+            
             this.saveHistory();
             
             console.log('=== DATA LOADING COMPLETE ===');
@@ -352,7 +1718,7 @@ class CoursePlanner {
 
     loadFromData(data) {
         // Validate version
-        if (data.version === CONFIG.APP_VERSION) {
+        if (data.version === CONFIG.APP_VERSION || data.version === '3.0.0') {
             this.units = data.units || [...this.defaultUnits];
             this.courseData = data.courseData || this.courseData;
             this.blockedWeeks = data.blockedWeeks || {};
@@ -415,9 +1781,16 @@ class CoursePlanner {
             // SINGLE SOURCE OF TRUTH: Save to the single key
             localStorage.setItem(CONFIG.SHARED_STORAGE_KEY, JSON.stringify(dataToSave));
             
+            // Save custom tiles separately
+            localStorage.setItem('course_planner_custom_tiles', JSON.stringify(this.customTiles));
+            
+            // Add timestamp for cache busting
+            localStorage.setItem('course_planner_last_update', Date.now().toString());
+            
             console.log('=== DATA SAVED ===');
             console.log('Saved to:', CONFIG.SHARED_STORAGE_KEY);
             console.log('Units saved:', dataToSave.units.length);
+            console.log('Custom tiles saved:', this.customTiles.length);
             console.log('Timestamp:', dataToSave.lastUpdate);
             
             return true;
@@ -435,6 +1808,7 @@ class CoursePlanner {
             units: JSON.parse(JSON.stringify(this.units)),
             courseData: JSON.parse(JSON.stringify(this.courseData)),
             blockedWeeks: JSON.parse(JSON.stringify(this.blockedWeeks)),
+            customTiles: JSON.parse(JSON.stringify(this.customTiles)),
             timestamp: Date.now()
         });
         
@@ -513,7 +1887,7 @@ class CoursePlanner {
         // Timeline grid
         html += `<div class="timeline-grid">`;
 
-        // Determine swimlanes based on view mode
+        // Determine swimlanes based on view mode (removed Integrated Project row)
         let swimlanes = [];
         const viewMode = this.isStudentView ? 'week' : (document.getElementById('viewMode')?.value || 'week');
         
@@ -521,7 +1895,7 @@ class CoursePlanner {
             swimlanes = [
                 { id: 'main', label: 'Main Teacher' },
                 { id: 'other', label: 'Other Teacher' },
-                { id: 'project', label: 'Projects' }
+                { id: 'custom', label: 'Custom Tiles & Tasks' }
             ];
         } else if (viewMode === 'term') {
             // For term view, show one swimlane per term
@@ -532,12 +1906,12 @@ class CoursePlanner {
                 });
             });
         } else {
-            // Default week view
+            // Default week view - removed Integrated Project lane
             swimlanes = [
                 { id: 'core', label: 'Core Units (Main Teacher)' },
                 { id: 'specialist', label: 'Specialist Units (Other Teacher)' },
-                { id: 'project', label: 'Integrated Project' },
-                { id: 'apex', label: 'Apex Units & Assessment' }
+                { id: 'custom', label: 'Custom Tiles & Assessments' },
+                { id: 'apex', label: 'Apex Units' }
             ];
         }
 
@@ -566,6 +1940,7 @@ class CoursePlanner {
                     `;
                 }
 
+                // Render units for this week and lane
                 const unitsInWeek = this.getUnitsForWeekAndLane(week, lane.id, viewMode);
                 
                 if (unitsInWeek.length > 0) {
@@ -573,8 +1948,21 @@ class CoursePlanner {
                         const isFirstWeek = week === Math.min(...unit.weeks);
                         html += this.renderUnitBlock(unit, week, isFirstWeek);
                     });
-                } else if (!isBlocked) {
-                    html += `<div class="empty-slot">${this.isStudentView ? 'No units' : 'Drag unit here'}</div>`;
+                }
+                
+                // Render custom tiles for custom lane
+                if (lane.id === 'custom') {
+                    const customTilesInWeek = this.customTiles.filter(tile => tile.week === week);
+                    customTilesInWeek.forEach(tile => {
+                        html += this.renderCustomTile(tile);
+                    });
+                }
+                
+                // Render project markers as separate elements (they are absolutely positioned)
+                // They will be added after the lane content is rendered
+
+                if (unitsInWeek.length === 0 && customTilesInWeek.length === 0 && !isBlocked) {
+                    html += `<div class="empty-slot">${this.isStudentView ? 'No items' : 'Drag unit or click + to add tile'}</div>`;
                 }
 
                 html += `</div>`;
@@ -586,10 +1974,8 @@ class CoursePlanner {
         html += `</div>`;
         container.innerHTML = html;
 
-        // Add project markers to the project lane
-        if (viewMode !== 'term') {
-            this.renderProjectMarkers();
-        }
+        // Add project markers to the custom lane (renamed from project lane)
+        this.renderProjectMarkers();
 
         // Add event listeners
         this.setupTimelineEvents();
@@ -618,19 +2004,38 @@ class CoursePlanner {
         const darkColor = this.darkenColor(color, 30);
         const isStudentView = this.isStudentView;
         const cursorStyle = isStudentView ? 'cursor: pointer;' : '';
+        const assessmentClass = unit.isAssessment ? 'assessment-task' : '';
         
         return `
-            <div class="unit-block" data-unit-id="${unit.id}" data-week="${week}"
+            <div class="unit-block ${assessmentClass}" data-unit-id="${unit.id}" data-week="${week}"
                  style="background: ${color}; border-left-color: ${darkColor}; ${cursorStyle}"
                  draggable="${!isStudentView}">
                 <div class="unit-code">${unit.code}</div>
                 ${isFirstWeek ? `<div class="unit-name">${unit.name}</div>` : ''}
                 ${unit.weeks.length > 1 && isFirstWeek ? 
                     `<div class="unit-duration">${unit.weeks.length}w</div>` : ''}
+                ${unit.isAssessment ? `<div class="assessment-badge">📝 ASSESSMENT</div>` : ''}
                 ${isStudentView && unit.teacher === 'other' ? 
                     `<div class="week-summary" style="color: #fd79a8;">Other Teacher</div>` : ''}
                 ${isStudentView && unit.tags && unit.tags.includes('SEASONAL') ? 
                     `<div class="week-summary" style="color: #55efc4;">Seasonal Timing</div>` : ''}
+            </div>
+        `;
+    }
+
+    renderCustomTile(tile) {
+        const tileColor = tile.customColor || '#f39c12';
+        const isAssessment = tile.type === 'assessment';
+        const assessmentClass = isAssessment ? 'assessment-task' : '';
+        
+        return `
+            <div class="unit-block ${assessmentClass}" data-tile-id="${tile.id}" data-week="${tile.week}"
+                 style="background: ${tileColor}; border-left-color: ${this.darkenColor(tileColor, 30)}; cursor: pointer;"
+                 onclick="window.app.showCustomTileDetails('${tile.id}')">
+                <div class="unit-code">${tile.title}</div>
+                <div class="unit-name">${tile.description ? tile.description.substring(0, 30) : ''}${tile.description && tile.description.length > 30 ? '...' : ''}</div>
+                ${isAssessment ? `<div class="assessment-badge">📝 DUE DATE</div>` : ''}
+                ${!this.isStudentView ? `<div class="unit-duration" style="cursor: pointer;" onclick="event.stopPropagation(); window.app.deleteCustomTile('${tile.id}')">✖ Delete</div>` : ''}
             </div>
         `;
     }
@@ -645,11 +2050,8 @@ class CoursePlanner {
                 return this.units.filter(unit => 
                     unit.weeks.includes(week) && unit.teacher === 'other'
                 );
-            } else if (laneId === 'project') {
-                return this.units.filter(unit => 
-                    unit.weeks.includes(week) && 
-                    (unit.code === 'INTEGRATION' || unit.code === 'PROJECT' || unit.tags.includes('PROJECT'))
-                );
+            } else if (laneId === 'custom') {
+                return []; // Custom tiles handled separately
             }
         } else if (viewMode === 'term') {
             const termNumber = parseInt(laneId.split('-')[1]);
@@ -665,18 +2067,14 @@ class CoursePlanner {
                     unit.weeks.includes(week) && 
                     unit.teacher === 'main' &&
                     !unit.tags.includes('APEX') &&
-                    unit.code !== 'INTEGRATION' &&
-                    unit.code !== 'PROJECT'
+                    !unit.isAssessment
                 );
             } else if (laneId === 'specialist') {
                 return this.units.filter(unit => 
                     unit.weeks.includes(week) && unit.teacher === 'other'
                 );
-            } else if (laneId === 'project') {
-                return this.units.filter(unit => 
-                    unit.weeks.includes(week) && 
-                    (unit.code === 'INTEGRATION' || unit.code === 'PROJECT')
-                );
+            } else if (laneId === 'custom') {
+                return []; // Custom tiles handled separately
             } else if (laneId === 'apex') {
                 return this.units.filter(unit => 
                     unit.weeks.includes(week) && unit.tags.includes('APEX')
@@ -687,11 +2085,11 @@ class CoursePlanner {
     }
 
     renderProjectMarkers() {
-        const projectLane = document.querySelector('.lane-content[data-lane-id="project"]');
-        if (!projectLane) return;
+        const customLane = document.querySelector('.lane-content[data-lane-id="custom"]');
+        if (!customLane) return;
 
         const weekWidth = this.isStudentView ? 120 : 150;
-        const laneHeight = projectLane.offsetHeight;
+        const laneHeight = customLane.offsetHeight || 60;
         
         // Remove existing markers first
         document.querySelectorAll('.project-marker').forEach(marker => marker.remove());
@@ -754,20 +2152,20 @@ class CoursePlanner {
                 });
             }
             
-            projectLane.appendChild(marker);
+            customLane.appendChild(marker);
         });
         
         // Add drop zone for markers
         if (!this.isStudentView) {
-            projectLane.addEventListener('dragover', (e) => {
+            customLane.addEventListener('dragover', (e) => {
                 e.preventDefault();
             });
             
-            projectLane.addEventListener('drop', (e) => {
+            customLane.addEventListener('drop', (e) => {
                 e.preventDefault();
                 if (!this.draggedMarker) return;
                 
-                const rect = projectLane.getBoundingClientRect();
+                const rect = customLane.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const weekWidth = this.isStudentView ? 120 : 150;
                 const week = Math.floor(x / weekWidth) + 1;
@@ -815,10 +2213,16 @@ class CoursePlanner {
                 break;
             case 'assessment':
                 unitsToHighlight = this.units.filter(unit => 
-                    unit.tags.includes('APEX') || 
-                    unit.code === 'INTEGRATION' || 
-                    unit.code === 'PROJECT'
+                    unit.isAssessment || unit.tags.includes('APEX')
                 );
+                // Also highlight assessment custom tiles
+                this.customTiles.filter(tile => tile.type === 'assessment').forEach(tile => {
+                    const tileElement = document.querySelector(`[data-tile-id="${tile.id}"]`);
+                    if (tileElement) {
+                        tileElement.style.boxShadow = '0 0 0 3px gold, 0 4px 8px rgba(0,0,0,0.3)';
+                        tileElement.style.zIndex = '10';
+                    }
+                });
                 break;
         }
         
@@ -833,7 +2237,7 @@ class CoursePlanner {
             }
         });
         
-        this.showToast(`Highlighting ${mode} units`, 'info');
+        this.showToast(`Highlighting ${mode} items`, 'info');
     }
 
     // ========== STUDENT VIEW SETUP ==========
@@ -860,7 +2264,7 @@ class CoursePlanner {
             if (courseTitle) courseTitle.textContent = 'Course Schedule - Cert III Conservation & Ecosystem Management';
             if (courseSubtitle) courseSubtitle.textContent = `Student View - ${this.courseData.totalWeeks}-Week Plan`;
             if (viewModeIndicator) viewModeIndicator.textContent = 'Student View';
-            if (courseDescription) courseDescription.textContent = 'Click units for details | Term overviews below';
+            if (courseDescription) courseDescription.textContent = 'Click items for details | Term overviews below';
             
             // Update view toggle
             if (viewIcon) viewIcon.textContent = '✏️';
@@ -880,6 +2284,155 @@ class CoursePlanner {
             console.log('Setting up student view...');
             this.setupStudentView();
         }
+    }
+
+    // ========== CUSTOM TILE FUNCTIONS ==========
+    addCustomTile() {
+        const modal = document.getElementById('customTileModal');
+        if (modal) {
+            // Reset form
+            document.getElementById('customTileWeek').value = '';
+            document.getElementById('customTileTitle').value = '';
+            document.getElementById('customTileDescription').value = '';
+            document.getElementById('customTileColor').value = '#f39c12';
+            document.getElementById('customTileType').value = 'custom';
+            modal.style.display = 'flex';
+        }
+    }
+
+    addCustomTileFromModal() {
+        const week = parseInt(document.getElementById('customTileWeek').value);
+        const title = document.getElementById('customTileTitle').value;
+        const description = document.getElementById('customTileDescription').value;
+        const color = document.getElementById('customTileColor').value;
+        const type = document.getElementById('customTileType').value;
+        
+        if (!week || isNaN(week) || week < 1 || week > this.courseData.totalWeeks) {
+            this.showToast('Please enter a valid week number', 'error');
+            return;
+        }
+        
+        if (!title.trim()) {
+            this.showToast('Please enter a title', 'error');
+            return;
+        }
+        
+        this.saveHistory();
+        
+        const newTile = {
+            id: `tile-${Date.now()}`,
+            week: week,
+            title: title,
+            description: description,
+            customColor: color,
+            type: type,
+            created: new Date().toISOString()
+        };
+        
+        this.customTiles.push(newTile);
+        this.renderEverything();
+        document.getElementById('customTileModal').style.display = 'none';
+        this.showToast(`${type === 'assessment' ? 'Assessment task' : 'Custom tile'} added for Week ${week}`, 'success');
+        this.showSyncNotification('Tile added');
+    }
+    
+    addAssessmentTask() {
+        // Quick add assessment task
+        const week = prompt('Enter week for assessment task due date (1-' + this.courseData.totalWeeks + '):');
+        if (!week) return;
+        
+        const weekNum = parseInt(week);
+        if (isNaN(weekNum) || weekNum < 1 || weekNum > this.courseData.totalWeeks) {
+            this.showToast('Invalid week number', 'error');
+            return;
+        }
+        
+        const title = prompt('Enter assessment task title:', `Assessment Task - Week ${weekNum}`);
+        if (!title) return;
+        
+        const description = prompt('Enter task description (optional):', '');
+        
+        this.saveHistory();
+        
+        const newTile = {
+            id: `assessment-${Date.now()}`,
+            week: weekNum,
+            title: title,
+            description: description || 'Assessment task due this week',
+            customColor: '#ff4757',
+            type: 'assessment',
+            created: new Date().toISOString()
+        };
+        
+        this.customTiles.push(newTile);
+        this.renderEverything();
+        this.showToast(`Assessment task "${title}" added for Week ${weekNum}`, 'success');
+        this.showSyncNotification('Assessment added');
+    }
+    
+    clearAllAssessments() {
+        if (!confirm('Clear ALL assessment tasks?')) return;
+        
+        this.saveHistory();
+        this.customTiles = this.customTiles.filter(tile => tile.type !== 'assessment');
+        this.renderEverything();
+        this.showToast('All assessment tasks cleared', 'success');
+        this.showSyncNotification('Assessments cleared');
+    }
+    
+    deleteCustomTile(tileId) {
+        if (!confirm('Delete this item?')) return;
+        
+        this.saveHistory();
+        this.customTiles = this.customTiles.filter(tile => tile.id !== tileId);
+        this.renderEverything();
+        this.showToast('Item deleted', 'success');
+        this.showSyncNotification('Item deleted');
+    }
+    
+    showCustomTileDetails(tileId) {
+        const tile = this.customTiles.find(t => t.id === tileId);
+        if (!tile) return;
+        
+        const modal = document.getElementById('unitModal');
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
+        
+        modalTitle.textContent = tile.type === 'assessment' ? '📝 Assessment Task' : '🎨 Custom Tile';
+        
+        modalBody.innerHTML = `
+            <div style="margin-bottom: 20px;">
+                <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                    <div style="flex: 1; background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #636e72;">Week</div>
+                        <div style="font-weight: 600;">Week ${tile.week}</div>
+                    </div>
+                    <div style="flex: 1; background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div style="font-size: 12px; color: #636e72;">Type</div>
+                        <div style="font-weight: 600;">${tile.type === 'assessment' ? 'Assessment Task' : 'Custom Event'}</div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <div style="font-size: 12px; color: #636e72; margin-bottom: 5px;">Title</div>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; font-weight: 600;">${tile.title}</div>
+                </div>
+                
+                ${tile.description ? `
+                    <div style="margin-bottom: 15px;">
+                        <div style="font-size: 12px; color: #636e72; margin-bottom: 5px;">Description</div>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 6px;">${tile.description}</div>
+                    </div>
+                ` : ''}
+                
+                <button onclick="document.getElementById('unitModal').style.display = 'none'" 
+                        style="width: 100%; padding: 10px; background: #0984e3; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    Close
+                </button>
+            </div>
+        `;
+        
+        modal.style.display = 'flex';
     }
 
     // ========== EVENT LISTENERS ==========
@@ -920,7 +2473,6 @@ class CoursePlanner {
         const exportPlanBtn = document.getElementById('exportPlan');
         if (exportPlanBtn) exportPlanBtn.addEventListener('click', () => this.exportPlan());
         
-        // NEW: List export button
         const exportListBtn = document.getElementById('exportList');
         if (exportListBtn) exportListBtn.addEventListener('click', () => this.exportAsList());
         
@@ -939,6 +2491,16 @@ class CoursePlanner {
         
         const removeWeekFromTermBtn = document.getElementById('removeWeekFromTermBtn');
         if (removeWeekFromTermBtn) removeWeekFromTermBtn.addEventListener('click', () => this.removeWeekFromTerm());
+        
+        // Custom tile controls
+        const addCustomTileBtn = document.getElementById('addCustomTile');
+        if (addCustomTileBtn) addCustomTileBtn.addEventListener('click', () => this.addCustomTile());
+        
+        const addAssessmentTaskBtn = document.getElementById('addAssessmentTask');
+        if (addAssessmentTaskBtn) addAssessmentTaskBtn.addEventListener('click', () => this.addAssessmentTask());
+        
+        const clearAssessmentsBtn = document.getElementById('clearAssessments');
+        if (clearAssessmentsBtn) clearAssessmentsBtn.addEventListener('click', () => this.clearAllAssessments());
         
         // Project milestone controls
         const addProjectMarkerBtn = document.getElementById('addProjectMarker');
@@ -967,7 +2529,8 @@ class CoursePlanner {
         // Modal close buttons
         document.querySelectorAll('.close-modal').forEach(btn => {
             btn.addEventListener('click', function() {
-                this.closest('.modal').style.display = 'none';
+                const modal = this.closest('.modal');
+                if (modal) modal.style.display = 'none';
             });
         });
         
@@ -999,6 +2562,10 @@ class CoursePlanner {
                 const panel = document.getElementById('sharePanel');
                 if (panel && panel.classList.contains('show')) {
                     panel.classList.remove('show');
+                }
+                const modal = document.getElementById('customTileModal');
+                if (modal && modal.style.display === 'flex') {
+                    modal.style.display = 'none';
                 }
             }
         });
@@ -1104,16 +2671,21 @@ class CoursePlanner {
         container.querySelectorAll('.unit-block').forEach(block => {
             block.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const unitId = e.currentTarget.dataset.unitId;
-                if (this.isStudentView) {
-                    this.showStudentUnitDetails(unitId);
-                } else {
-                    this.openUnitModal(unitId);
+                const unitId = block.dataset.unitId;
+                const tileId = block.dataset.tileId;
+                if (unitId) {
+                    if (this.isStudentView) {
+                        this.showStudentUnitDetails(unitId);
+                    } else {
+                        this.openUnitModal(unitId);
+                    }
+                } else if (tileId && !this.isStudentView) {
+                    // Tile click handled by onclick attribute
                 }
             });
 
             // Drag and drop for editor view
-            if (!this.isStudentView) {
+            if (!this.isStudentView && block.dataset.unitId) {
                 block.addEventListener('dragstart', (e) => {
                     const unitId = e.currentTarget.dataset.unitId;
                     const unit = this.units.find(u => u.id === unitId);
@@ -1212,7 +2784,8 @@ class CoursePlanner {
             tags: [...template.tags],
             teacher: lane === 'specialist' || lane === 'other' ? 'other' : 'main',
             notes: '',
-            resources: []
+            resources: [],
+            isAssessment: false
         };
 
         this.units.push(newUnit);
@@ -1376,6 +2949,13 @@ class CoursePlanner {
                     <textarea id="editUnitNotes" rows="4">${unit.notes || ''}</textarea>
                 </div>
                 
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="editUnitIsAssessment" ${unit.isAssessment ? 'checked' : ''}>
+                        Mark as Assessment Task (applies visual highlighting)
+                    </label>
+                </div>
+                
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button class="primary" onclick="window.app.saveUnitChanges('${unitId}')" style="flex: 1;">Save Changes</button>
                     <button class="warning" onclick="window.app.deleteUnit('${unitId}')" style="flex: 1;">Delete Unit</button>
@@ -1407,6 +2987,7 @@ class CoursePlanner {
         unit.tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
         
         unit.notes = document.getElementById('editUnitNotes').value;
+        unit.isAssessment = document.getElementById('editUnitIsAssessment').checked;
 
         document.getElementById('unitModal').style.display = 'none';
         this.renderEverything();
@@ -1456,6 +3037,10 @@ class CoursePlanner {
                 );
             });
             
+            const termTiles = this.customTiles.filter(tile => 
+                tile.week >= term.startWeek && tile.week < term.startWeek + term.weeks
+            );
+            
             // Get unique units by code
             const uniqueUnits = [];
             const seenCodes = new Set();
@@ -1471,13 +3056,22 @@ class CoursePlanner {
                     <h3>Term ${term.number}: ${term.name}</h3>
                     <div class="term-units">
                         ${uniqueUnits.map(unit => `
-                            <div class="term-unit-card">
+                            <div class="term-unit-card ${unit.isAssessment ? 'assessment' : ''}">
                                 <div style="font-weight: 600; color: #0984e3;">${unit.code}</div>
                                 <div style="font-size: 13px; margin-top: 5px;">${unit.name}</div>
+                                ${unit.isAssessment ? `<div style="font-size: 11px; color: #ff4757; margin-top: 3px;">📝 ASSESSMENT TASK</div>` : ''}
                                 ${unit.teacher === 'other' ? 
                                     `<div style="font-size: 11px; color: #fd79a8; margin-top: 3px;">Other Teacher</div>` : ''}
                                 ${unit.tags && unit.tags.includes('SEASONAL') ? 
                                     `<div style="font-size: 11px; color: #55efc4; margin-top: 3px;">Seasonal Timing</div>` : ''}
+                            </div>
+                        `).join('')}
+                        ${termTiles.map(tile => `
+                            <div class="term-unit-card ${tile.type === 'assessment' ? 'assessment' : ''}" 
+                                 style="border-left-color: ${tile.customColor || '#f39c12'};">
+                                <div style="font-weight: 600; color: ${tile.customColor || '#f39c12'};">${tile.title}</div>
+                                <div style="font-size: 13px; margin-top: 5px;">${tile.description || ''}</div>
+                                ${tile.type === 'assessment' ? `<div style="font-size: 11px; color: #ff4757; margin-top: 3px;">📝 DUE Week ${tile.week}</div>` : ''}
                             </div>
                         `).join('')}
                     </div>
@@ -1515,6 +3109,12 @@ class CoursePlanner {
                         <div style="font-weight: 600;">${unit.teacher === 'other' ? 'Other Teacher' : 'Main Teacher'}</div>
                     </div>
                 </div>
+                
+                ${unit.isAssessment ? `
+                    <div style="margin-bottom: 15px; background: #ff4757; color: white; padding: 8px; border-radius: 6px; text-align: center;">
+                        📝 ASSESSMENT TASK - Due in Week ${endWeek}
+                    </div>
+                ` : ''}
                 
                 ${unit.tags && unit.tags.length > 0 ? `
                     <div style="margin-bottom: 15px;">
@@ -1638,6 +3238,7 @@ class CoursePlanner {
             units: this.units,
             courseData: this.courseData,
             blockedWeeks: this.blockedWeeks,
+            customTiles: this.customTiles,
             version: CONFIG.APP_VERSION
         };
 
@@ -1665,6 +3266,7 @@ class CoursePlanner {
                 this.units = plan.units || [];
                 this.courseData = plan.courseData || this.courseData;
                 this.blockedWeeks = plan.blockedWeeks || {};
+                this.customTiles = plan.customTiles || [];
                 this.renderEverything();
                 this.showToast(`Loaded "${plan.name}"`, 'success');
                 this.showSyncNotification('Plan loaded');
@@ -1698,20 +3300,21 @@ class CoursePlanner {
             return null;
         }
         
-        // Generate simple share URL
+        // Generate simple share URL with timestamp to prevent caching
         const baseUrl = window.location.origin + window.location.pathname;
-        const shareUrl = `${baseUrl}?student=true&v=${Date.now()}`; // Add timestamp to prevent caching
+        const timestamp = Date.now();
+        const shareUrl = `${baseUrl}?student=true&v=${timestamp}`;
         
         console.log('=== SHARE LINK GENERATED ===');
         console.log('Share URL:', shareUrl);
         console.log('Data saved to:', CONFIG.SHARED_STORAGE_KEY);
         console.log('Units in storage:', this.units.length);
+        console.log('Custom tiles in storage:', this.customTiles.length);
         console.log('Timestamp:', new Date().toISOString());
         
         return shareUrl;
     }
 
-    // ========== UPDATED: SHARING WITH NEW FEATURES ==========
     sharePlan() {
         if (this.isStudentView) return;
         
@@ -1733,8 +3336,6 @@ class CoursePlanner {
         
         console.log('=== SHARE PLAN ===');
         console.log('Share URL:', shareUrl);
-        console.log('Data size:', shareUrl.length, 'characters');
-        console.log('Storage key:', CONFIG.SHARED_STORAGE_KEY);
         
         // Show share panel
         const panel = document.getElementById('sharePanel');
@@ -1757,27 +3358,8 @@ class CoursePlanner {
         };
         
         this.showToast('Share link generated!', 'success');
-        
-        // Add a verification step
-        setTimeout(() => {
-            console.log('=== VERIFYING SHARED DATA ===');
-            const storedData = localStorage.getItem(CONFIG.SHARED_STORAGE_KEY);
-            if (storedData) {
-                const data = JSON.parse(storedData);
-                console.log('Data verified in storage:', {
-                    units: data.units?.length || 0,
-                    weeks: data.courseData?.totalWeeks || 0,
-                    timestamp: data.lastUpdate
-                });
-                console.log('URL length:', shareUrl.length, 'characters');
-            } else {
-                console.warn('No data found in shared storage!');
-                this.showToast('Warning: No data saved to storage!', 'error');
-            }
-        }, 100);
     }
 
-    // ========== NEW: Test Student View Link ==========
     testStudentViewLink() {
         const shareUrl = this.generateShareLink();
         if (!shareUrl) return;
@@ -1792,13 +3374,13 @@ class CoursePlanner {
                 if (testWindow.closed) return;
                 
                 try {
-                    // Check if data loaded in test window
                     testWindow.postMessage({
                         type: 'test_data_load',
                         source: 'editor',
                         timestamp: Date.now(),
                         units: this.units.length,
-                        weeks: this.courseData.totalWeeks
+                        weeks: this.courseData.totalWeeks,
+                        tiles: this.customTiles.length
                     }, '*');
                     
                     this.showToast('Test window opened. Verify data matches.', 'success');
@@ -1901,12 +3483,12 @@ class CoursePlanner {
         this.printFullSchedule();
     }
 
-    // ========== NEW: EXPORT AS LIST/CSV ==========
+    // ========== EXPORT AS LIST/CSV ==========
     exportAsList() {
         if (this.isStudentView) return;
         
         // Generate CSV content
-        let csvContent = "Week,Term,Unit Code,Unit Name,Teacher,Duration,Type,Tags,Notes\n";
+        let csvContent = "Week,Term,Item Type,Code/Title,Name/Description,Teacher,Duration,Type,Tags,Notes\n";
         
         // Sort units by starting week
         const sortedUnits = [...this.units].sort((a, b) => {
@@ -1932,6 +3514,7 @@ class CoursePlanner {
             csvContent += [
                 `${startWeek}-${endWeek}`,
                 termText,
+                unit.isAssessment ? 'Assessment Unit' : 'Unit',
                 escapeCSV(unit.code),
                 escapeCSV(unit.name),
                 unit.teacher === 'other' ? 'Other Teacher' : 'Main Teacher',
@@ -1939,6 +3522,30 @@ class CoursePlanner {
                 escapeCSV(unit.color),
                 escapeCSV(unit.tags?.join(', ')),
                 escapeCSV(unit.notes)
+            ].join(',') + '\n';
+        });
+        
+        // Process custom tiles
+        this.customTiles.forEach(tile => {
+            const term = this.getTermForWeek(tile.week);
+            const termText = term ? `Term ${term.number}` : 'N/A';
+            
+            const escapeCSV = (str) => {
+                if (str == null) return '';
+                return `"${String(str).replace(/"/g, '""')}"`;
+            };
+            
+            csvContent += [
+                `Week ${tile.week}`,
+                termText,
+                tile.type === 'assessment' ? 'Assessment Task' : 'Custom Tile',
+                escapeCSV(tile.title),
+                escapeCSV(tile.description),
+                'N/A',
+                '1 week',
+                escapeCSV(tile.type),
+                escapeCSV(''),
+                escapeCSV('')
             ].join(',') + '\n';
         });
         
@@ -1957,6 +3564,8 @@ class CoursePlanner {
         // Add summary
         csvContent += `\n\nSUMMARY\nTotal Weeks:,${this.courseData.totalWeeks}\n`;
         csvContent += `Total Units:,${this.units.length}\n`;
+        csvContent += `Custom Tiles:,${this.customTiles.length}\n`;
+        csvContent += `Assessment Tasks:,${this.customTiles.filter(t => t.type === 'assessment').length + this.units.filter(u => u.isAssessment).length}\n`;
         csvContent += `Generated:,${new Date().toLocaleString()}\n`;
         
         // Create and trigger download
@@ -1978,49 +3587,29 @@ class CoursePlanner {
         }, 500);
     }
 
-    // ========== NEW: PLAIN TEXT LIST ==========
     generatePlainTextList() {
         let textContent = `COURSE SCHEDULE - CERTIFICATE III CONSERVATION & ECOSYSTEM MANAGEMENT\n`;
         textContent += `Generated: ${new Date().toLocaleString()}\n`;
         textContent += `Total Weeks: ${this.courseData.totalWeeks} | Total Units: ${this.units.length}\n`;
         textContent += '='.repeat(80) + '\n\n';
         
-        // Add scheduling method warning
-        textContent += 'IMPORTANT: Check if units are scheduled as individual weeks or multi-week blocks\n';
-        textContent += 'Units should be scheduled as continuous blocks for proper reporting.\n';
-        textContent += 'To fix: Edit each unit and specify weeks as a range (e.g., "5-7" for 3 weeks)\n\n';
-
-        // Show unit scheduling summary
-        textContent += 'UNIT SCHEDULING SUMMARY:\n';
-        textContent += '-'.repeat(80) + '\n';
-
-        const unitScheduleTypes = {
-            singleWeek: 0,
-            multiWeekConsecutive: 0,
-            multiWeekNonConsecutive: 0
-        };
-
-        this.units.forEach(unit => {
-            if (unit.weeks.length === 1) {
-                unitScheduleTypes.singleWeek++;
-            } else {
-                const sortedWeeks = [...unit.weeks].sort((a, b) => a - b);
-                const isConsecutive = sortedWeeks.every((week, index) => 
-                    index === 0 || week === sortedWeeks[index - 1] + 1
-                );
-                
-                if (isConsecutive) {
-                    unitScheduleTypes.multiWeekConsecutive++;
-                } else {
-                    unitScheduleTypes.multiWeekNonConsecutive++;
-                }
-            }
-        });
-
-        textContent += `Single-week units: ${unitScheduleTypes.singleWeek}\n`;
-        textContent += `Multi-week consecutive blocks: ${unitScheduleTypes.multiWeekConsecutive}\n`;
-        textContent += `Multi-week non-consecutive sessions: ${unitScheduleTypes.multiWeekNonConsecutive}\n\n`;
-        textContent += 'NOTE: For best results, schedule multi-week units as continuous blocks.\n\n';
+        // Add assessment tasks summary
+        const assessmentUnits = this.units.filter(u => u.isAssessment);
+        const assessmentTiles = this.customTiles.filter(t => t.type === 'assessment');
+        
+        if (assessmentUnits.length > 0 || assessmentTiles.length > 0) {
+            textContent += '📝 ASSESSMENT TASKS SUMMARY:\n';
+            textContent += '-'.repeat(80) + '\n';
+            assessmentUnits.forEach(unit => {
+                const endWeek = Math.max(...unit.weeks);
+                textContent += `  • ${unit.code}: ${unit.name} - Due Week ${endWeek}\n`;
+            });
+            assessmentTiles.forEach(tile => {
+                textContent += `  • ${tile.title} - Due Week ${tile.week}\n`;
+                if (tile.description) textContent += `    ${tile.description}\n`;
+            });
+            textContent += '\n';
+        }
         
         // Group by term
         this.courseData.terms.forEach(term => {
@@ -2028,47 +3617,42 @@ class CoursePlanner {
             textContent += `Weeks ${term.startWeek} to ${term.startWeek + term.weeks - 1} (${term.weeks} weeks)\n`;
             textContent += '-'.repeat(80) + '\n\n';
             
-            // Get units in this term - include all units that have any week in this term
+            // Get units in this term
             const termUnits = this.units.filter(unit => {
                 const weeks = unit.weeks;
                 return weeks.some(week => 
                     week >= term.startWeek && week < term.startWeek + term.weeks
                 );
             });
-
-            // Group by unit ID (not just code) to properly handle multi-week units
+            
+            // Get custom tiles in this term
+            const termTiles = this.customTiles.filter(tile => 
+                tile.week >= term.startWeek && tile.week < term.startWeek + term.weeks
+            );
+            
+            // Sort units by starting week
             const uniqueUnits = [];
             const seenUnitIds = new Set();
-
+            
             termUnits.forEach(unit => {
                 if (!seenUnitIds.has(unit.id)) {
                     seenUnitIds.add(unit.id);
                     
-                    // Get all weeks for this unit in this term
                     const weeksInTerm = unit.weeks.filter(week => 
                         week >= term.startWeek && week < term.startWeek + term.weeks
                     );
                     
                     if (weeksInTerm.length > 0) {
-                        // Create a copy with only the weeks in this term
-                        const unitInTerm = {
-                            ...unit,
-                            weeks: weeksInTerm
-                        };
-                        uniqueUnits.push(unitInTerm);
+                        uniqueUnits.push({...unit, weeks: weeksInTerm});
                     }
                 }
             });
-
-            // Sort units by starting week
-            uniqueUnits.sort((a, b) => {
-                const aStart = Math.min(...a.weeks);
-                const bStart = Math.min(...b.weeks);
-                return aStart - bStart;
-            });
-
-            if (uniqueUnits.length === 0) {
-                textContent += "No units scheduled for this term\n\n";
+            
+            uniqueUnits.sort((a, b) => Math.min(...a.weeks) - Math.min(...b.weeks));
+            termTiles.sort((a, b) => a.week - b.week);
+            
+            if (uniqueUnits.length === 0 && termTiles.length === 0) {
+                textContent += "No items scheduled for this term\n\n";
             } else {
                 uniqueUnits.forEach(unit => {
                     const startWeek = Math.min(...unit.weeks);
@@ -2078,12 +3662,21 @@ class CoursePlanner {
                     textContent += `• ${unit.code}: ${unit.name}\n`;
                     textContent += `  Schedule: ${this.getUnitDurationText(unit)}\n`;
                     textContent += `  Teacher: ${unit.teacher === 'other' ? 'Other Teacher' : 'Main Teacher'}\n`;
+                    if (unit.isAssessment) textContent += `  📝 ASSESSMENT TASK\n`;
                     if (unit.tags && unit.tags.length > 0) {
                         textContent += `  Tags: ${unit.tags.join(', ')}\n`;
                     }
                     if (unit.notes) {
                         textContent += `  Notes: ${unit.notes}\n`;
                     }
+                    textContent += '\n';
+                });
+                
+                termTiles.forEach(tile => {
+                    textContent += `• ${tile.title}\n`;
+                    textContent += `  Week ${tile.week}\n`;
+                    if (tile.type === 'assessment') textContent += `  📝 ASSESSMENT DUE DATE\n`;
+                    if (tile.description) textContent += `  Details: ${tile.description}\n`;
                     textContent += '\n';
                 });
             }
@@ -2118,61 +3711,6 @@ class CoursePlanner {
             textContent += '\n';
         }
         
-        // Add week-by-week breakdown
-        textContent += 'WEEK-BY-WEEK BREAKDOWN:\n';
-        textContent += '='.repeat(80) + '\n';
-        
-        for (let week = 1; week <= this.courseData.totalWeeks; week++) {
-            const term = this.getTermForWeek(week);
-            const isBlocked = this.blockedWeeks[week];
-            const unitsThisWeek = this.units.filter(unit => unit.weeks.includes(week));
-            const projectMilestone = this.courseData.projectMilestones.find(m => m.week === week);
-            
-            textContent += `Week ${week}`;
-            if (term) textContent += ` (Term ${term.number})`;
-            textContent += ':\n';
-            
-            if (isBlocked) {
-                textContent += `  [${this.blockingLabels[isBlocked.type] || 'BLOCKED'}]\n`;
-            } else if (unitsThisWeek.length === 0) {
-                textContent += `  No scheduled units\n`;
-            } else {
-                // Group by teacher
-                const mainTeacherUnits = unitsThisWeek.filter(u => u.teacher === 'main');
-                const otherTeacherUnits = unitsThisWeek.filter(u => u.teacher === 'other');
-                
-                if (mainTeacherUnits.length > 0) {
-                    textContent += `  Main Teacher:\n`;
-                    mainTeacherUnits.forEach(unit => {
-                        const weekIndexInUnit = unit.weeks.indexOf(week) + 1;
-                        if (unit.weeks.length > 1) {
-                            textContent += `    - ${unit.code}: ${unit.name} (Week ${weekIndexInUnit} of ${unit.weeks.length})\n`;
-                        } else {
-                            textContent += `    - ${unit.code}: ${unit.name}\n`;
-                        }
-                    });
-                }
-                
-                if (otherTeacherUnits.length > 0) {
-                    textContent += `  Other Teacher:\n`;
-                    otherTeacherUnits.forEach(unit => {
-                        const weekIndexInUnit = unit.weeks.indexOf(week) + 1;
-                        if (unit.weeks.length > 1) {
-                            textContent += `    - ${unit.code}: ${unit.name} (Week ${weekIndexInUnit} of ${unit.weeks.length})\n`;
-                        } else {
-                            textContent += `    - ${unit.code}: ${unit.name}\n`;
-                        }
-                    });
-                }
-            }
-            
-            if (projectMilestone) {
-                textContent += `  Project: ${projectMilestone.label}\n`;
-            }
-            
-            textContent += '\n';
-        }
-        
         // Create and trigger download
         const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -2187,11 +3725,9 @@ class CoursePlanner {
         this.showToast('Detailed schedule exported as text file', 'success');
     }
 
-    // ========== NEW: HELPER METHOD FOR UNIT DURATION TEXT ==========
     getUnitDurationText(unit) {
         if (unit.weeks.length === 1) return 'Week ' + unit.weeks[0];
         
-        // Sort weeks and check if they're consecutive
         const sortedWeeks = [...unit.weeks].sort((a, b) => a - b);
         const isConsecutive = sortedWeeks.every((week, index) => 
             index === 0 || week === sortedWeeks[index - 1] + 1
@@ -2209,6 +3745,7 @@ class CoursePlanner {
         if (confirm('Reset to default course sequence? Any unsaved changes will be lost.')) {
             this.saveHistory();
             this.units = [...this.defaultUnits];
+            this.customTiles = [];
             this.courseData = {
                 totalWeeks: CONFIG.DEFAULT_TOTAL_WEEKS,
                 terms: [
@@ -2218,10 +3755,10 @@ class CoursePlanner {
                     { number: 4, weeks: 7, startWeek: 31, name: "Apex & Finalisation" }
                 ],
                 projectMilestones: [
-                    { week: 18, label: "Project Start" },
-                    { week: 25, label: "Phase 2" },
-                    { week: 30, label: "Integration" },
-                    { week: 34, label: "Final Phase" }
+                    { id: 'milestone-1', week: 18, label: "Project Start" },
+                    { id: 'milestone-2', week: 25, label: "Phase 2" },
+                    { id: 'milestone-3', week: 30, label: "Integration" },
+                    { id: 'milestone-4', week: 34, label: "Final Phase" }
                 ]
             };
             this.blockedWeeks = {};
@@ -2236,6 +3773,7 @@ class CoursePlanner {
         if (confirm('Are you sure you want to clear ALL units from the timetable?')) {
             this.saveHistory();
             this.units = [];
+            this.customTiles = [];
             this.renderEverything();
             this.showToast('Timetable cleared', 'success');
             this.showSyncNotification('Timetable cleared');
@@ -2338,6 +3876,13 @@ class CoursePlanner {
         // Adjust units
         this.adjustUnitsForWeekInsertion(insertPosition, 1);
         
+        // Adjust custom tiles
+        this.customTiles.forEach(tile => {
+            if (tile.week >= insertPosition) {
+                tile.week++;
+            }
+        });
+        
         this.renderEverything();
         this.showToast('Week added', 'success');
         this.showSyncNotification('Week added');
@@ -2352,7 +3897,7 @@ class CoursePlanner {
             return;
         }
 
-        if (!confirm(`Remove Week ${weekToRemove}? This will also remove any units scheduled for this week.`)) {
+        if (!confirm(`Remove Week ${weekToRemove}? This will also remove any items scheduled for this week.`)) {
             return;
         }
 
@@ -2386,6 +3931,14 @@ class CoursePlanner {
         // Remove units in this week and adjust others
         this.adjustUnitsForWeekRemoval(weekToRemove);
         
+        // Remove custom tiles in this week and adjust others
+        this.customTiles = this.customTiles.filter(tile => tile.week !== weekToRemove);
+        this.customTiles.forEach(tile => {
+            if (tile.week > weekToRemove) {
+                tile.week--;
+            }
+        });
+        
         this.renderEverything();
         this.showToast('Week removed', 'success');
         this.showSyncNotification('Week removed');
@@ -2417,6 +3970,13 @@ class CoursePlanner {
         
         // Adjust units in subsequent terms
         this.adjustUnitsForWeekInsertion(term.startWeek + term.weeks - 1, 1);
+        
+        // Adjust custom tiles
+        this.customTiles.forEach(tile => {
+            if (tile.week >= term.startWeek + term.weeks - 1) {
+                tile.week++;
+            }
+        });
         
         this.renderEverything();
         this.showToast(`Week added to Term ${termNumber}`, 'success');
@@ -2460,6 +4020,14 @@ class CoursePlanner {
         
         // Remove units in this week and adjust others
         this.adjustUnitsForWeekRemoval(weekToRemove);
+        
+        // Remove custom tiles in this week and adjust others
+        this.customTiles = this.customTiles.filter(tile => tile.week !== weekToRemove);
+        this.customTiles.forEach(tile => {
+            if (tile.week > weekToRemove) {
+                tile.week--;
+            }
+        });
         
         this.renderEverything();
         this.showToast(`Week removed from Term ${termNumber}`, 'success');
@@ -2540,7 +4108,8 @@ class CoursePlanner {
             timestamp: new Date().toISOString(),
             units: this.units,
             courseData: this.courseData,
-            blockedWeeks: this.blockedWeeks
+            blockedWeeks: this.blockedWeeks,
+            customTiles: this.customTiles
         };
 
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2573,6 +4142,7 @@ class CoursePlanner {
                     this.units = data.units;
                     this.courseData = data.courseData;
                     this.blockedWeeks = data.blockedWeeks || {};
+                    this.customTiles = data.customTiles || [];
                     this.renderEverything();
                     this.showToast('Plan imported successfully', 'success');
                     this.showSyncNotification('Plan imported');
@@ -2714,6 +4284,12 @@ class CoursePlanner {
                             this.exportAsList();
                         }
                         break;
+                    case 'a':
+                        if (!this.isStudentView) {
+                            e.preventDefault();
+                            this.addAssessmentTask();
+                        }
+                        break;
                 }
             }
             
@@ -2734,6 +4310,7 @@ class CoursePlanner {
             this.units = JSON.parse(JSON.stringify(state.units));
             this.courseData = JSON.parse(JSON.stringify(state.courseData));
             this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
+            this.customTiles = JSON.parse(JSON.stringify(state.customTiles || []));
             this.renderEverything();
             this.showToast('Undo', 'success');
             return true;
@@ -2748,6 +4325,7 @@ class CoursePlanner {
             this.units = JSON.parse(JSON.stringify(state.units));
             this.courseData = JSON.parse(JSON.stringify(state.courseData));
             this.blockedWeeks = JSON.parse(JSON.stringify(state.blockedWeeks));
+            this.customTiles = JSON.parse(JSON.stringify(state.customTiles || []));
             this.renderEverything();
             this.showToast('Redo', 'success');
             return true;
@@ -2771,12 +4349,19 @@ class CoursePlanner {
             console.log('Last update:', data.lastUpdate);
             console.log('Units in storage:', data.units?.length || 0);
             console.log('Units in memory:', this.units.length);
+            console.log('Custom tiles in storage:', data.customTiles?.length || 0);
+            console.log('Custom tiles in memory:', this.customTiles.length);
             console.log('Match:', data.units?.length === this.units.length);
             return true;
         } catch (error) {
             console.error('Data verification failed:', error);
             return false;
         }
+    }
+    
+    openTermModal(termNumber) {
+        // Placeholder for term modal functionality
+        this.showToast('Term management functionality - click to edit term details', 'info');
     }
 }
 
@@ -2793,8 +4378,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'test_data_load' && event.data.source === 'editor') {
             console.log('=== STUDENT VIEW TEST ===');
-            console.log('Editor sent:', event.data.units, 'units,', event.data.weeks, 'weeks');
-            console.log('Student has:', app.units.length, 'units,', app.courseData.totalWeeks, 'weeks');
+            console.log('Editor sent:', event.data.units, 'units,', event.data.weeks, 'weeks,', event.data.tiles, 'tiles');
+            console.log('Student has:', app.units.length, 'units,', app.courseData.totalWeeks, 'weeks,', app.customTiles.length, 'tiles');
             
             if (event.data.units === app.units.length && event.data.weeks === app.courseData.totalWeeks) {
                 alert('✓ Test passed! Data is synchronized correctly.');
@@ -2830,5 +4415,8 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             document.body.appendChild(debugBtn);
         }
-    }, 500); // Wait a bit for everything to settle
+    }, 500);
 });
+</script>
+</body>
+</html>
