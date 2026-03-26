@@ -1,237 +1,217 @@
-Looking at your code, I can see the issue causing a blank main panel. The problem is likely in the renderTimeline() method - there's a race condition where it's trying to render before the DOM elements are ready.
+You're right - the issue is more fundamental. Looking at your code, I can see the problem is in the renderUnitPalette() method which is failing, and the timeline isn't rendering because of the view mode selector. Let me provide the critical fixes:
 
-Here are the main issues:
+Fix 1: Update the renderUnitPalette() method
 
-1. Race Condition: The renderEverything() is being called before DOM elements are guaranteed to exist
-2. Missing Total Weeks: In student view, the timeline might not be rendering because the total weeks calculation might be off
-
-Here's the fix - replace your renderTimeline() method with this improved version:
+Replace your current renderUnitPalette() method with this:
 
 ```javascript
-renderTimeline() {
-    const container = document.getElementById('timelineContent');
+renderUnitPalette() {
+    if (this.isStudentView) return;
+    
+    const container = document.getElementById('unitPalette');
     if (!container) {
-        console.warn('Timeline container not found, retrying...');
-        // Retry after a short delay
-        setTimeout(() => this.renderTimeline(), 100);
+        console.error('Unit palette container not found');
         return;
     }
 
-    console.log('Rendering timeline with', this.courseData.totalWeeks, 'weeks');
+    console.log('Rendering unit palette with', this.unitTemplates.length, 'templates');
     
-    const { totalWeeks, terms } = this.courseData;
-    
-    // CRITICAL FIX: Ensure totalWeeks is valid
-    if (!totalWeeks || totalWeeks <= 0) {
-        console.error('Invalid total weeks:', totalWeeks);
-        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #ff6b6b;">⚠️ Error: Invalid week configuration. Please refresh the page.</div>';
+    // Check if unitTemplates exists
+    if (!this.unitTemplates || this.unitTemplates.length === 0) {
+        console.error('No unit templates found');
+        container.innerHTML = '<p>Error: No units available</p>';
         return;
     }
     
-    // CRITICAL FIX: Ensure terms are properly defined
-    if (!terms || terms.length === 0) {
-        console.error('No terms defined');
-        container.innerHTML = '<div style="padding: 20px; text-align: center;">Loading course structure...</div>';
-        return;
-    }
-    
-    const weekWidth = this.isStudentView ? 120 : 150;
-        
-    // Update CSS variables
-    document.documentElement.style.setProperty('--week-width', `${weekWidth}px`);
-    document.documentElement.style.setProperty('--total-weeks', totalWeeks);
-
-    let html = '';
-
-    // Term headers
-    html += `<div class="term-headers">`;
-    html += `<div class="term-spacer"></div>`;
-    
-    terms.forEach(term => {
-        // Validate term weeks
-        if (!term.weeks || term.weeks <= 0) {
-            console.warn('Invalid term weeks for term', term.number);
-            return;
-        }
-        
-        const termWidth = term.weeks * weekWidth;
-        const clickable = !this.isStudentView ? 'cursor: pointer;' : '';
-        html += `
-            <div class="term-header" data-term="${term.number}" 
-                 style="width: ${termWidth}px; ${clickable}" 
-                 title="${this.isStudentView ? '' : 'Click to manage term'}">
-                Term ${term.number} (Weeks ${term.startWeek}-${term.startWeek + term.weeks - 1})
-                <div style="font-size: 12px; opacity: 0.8; margin-top: 3px;">${term.name}</div>
+    container.innerHTML = this.unitTemplates.map(template => {
+        const color = this.colorMap[template.color] || '#4ecdc4';
+        return `
+            <div class="unit-item" draggable="true" data-template='${JSON.stringify(template)}'
+                 style="border-left: 4px solid ${color}; margin-bottom: 8px;">
+                <div class="unit-code">${template.code}</div>
+                <div class="unit-name">${template.name}</div>
+                <div style="display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap;">
+                    ${template.tags.map(tag => `
+                        <span style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #e9ecef; color: #495057;">
+                            ${tag}
+                        </span>
+                    `).join('')}
+                </div>
             </div>
         `;
-    });
+    }).join('');
 
-    html += `</div>`;
-
-    // Week headers
-    html += `<div class="week-headers">`;
-    html += `<div class="week-spacer"></div>`;
-    
-    for (let week = 1; week <= totalWeeks; week++) {
-        const term = this.getTermForWeek(week);
-        html += `
-            <div class="week-header" style="width: ${weekWidth}px;">
-                <div class="week-number">Week ${week}</div>
-                ${term ? `<div style="font-size: 11px; color: #666;">Term ${term.number}</div>` : ''}
-            </div>
-        `;
-    }
-
-    html += `</div>`;
-
-    // Timeline grid
-    html += `<div class="timeline-grid">`;
-
-    // Determine swimlanes based on view mode
-    let swimlanes = [];
-    const viewMode = this.isStudentView ? 'week' : (document.getElementById('viewMode')?.value || 'week');
-    
-    if (viewMode === 'teacher') {
-        swimlanes = [
-            { id: 'main', label: 'Main Teacher' },
-            { id: 'other', label: 'Other Teacher' },
-            { id: 'custom', label: 'Custom Tiles & Tasks' }
-        ];
-    } else if (viewMode === 'term') {
-        // For term view, show one swimlane per term
-        terms.forEach(term => {
-            swimlanes.push({
-                id: `term-${term.number}`,
-                label: `Term ${term.number}: ${term.name}`
-            });
-        });
-    } else {
-        // Default week view
-        swimlanes = [
-            { id: 'core', label: 'Core Units (Main Teacher)' },
-            { id: 'specialist', label: 'Specialist Units (Other Teacher)' },
-            { id: 'custom', label: 'Custom Tiles & Assessments' },
-            { id: 'apex', label: 'Apex Units' }
-        ];
-    }
-
-    swimlanes.forEach((lane, laneIndex) => {
-        html += `
-            <div class="swimlane" data-lane="${lane.id}">
-                <div class="lane-label">${lane.label}</div>
-                <div class="lane-content" data-lane-id="${lane.id}">
-        `;
-
-        for (let week = 1; week <= totalWeeks; week++) {
-            const isBlocked = this.blockedWeeks[week];
-            const blockedClass = isBlocked ? 'blocked-week' : '';
-            
-            // Get background color for blocked weeks
-            let blockedStyle = '';
-            if (isBlocked && this.colorMap[isBlocked.type]) {
-                blockedStyle = `background: ${this.colorMap[isBlocked.type]}; opacity: 0.7;`;
-            }
-            
-            html += `
-                <div class="week-slot ${blockedClass}" data-week="${week}" data-lane="${lane.id}" 
-                     style="width: ${weekWidth}px; ${blockedStyle}">
-            `;
-
-            if (isBlocked) {
-                html += `
-                    <div style="position: absolute; top: 5px; left: 5px; font-size: 10px; 
-                                color: white; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px;">
-                        ${this.blockingLabels[isBlocked.type] || 'BLOCKED'}
-                    </div>
-                `;
-            }
-
-            // Render units for this week and lane
-            const unitsInWeek = this.getUnitsForWeekAndLane(week, lane.id, viewMode);
-            
-            if (unitsInWeek.length > 0) {
-                unitsInWeek.forEach(unit => {
-                    const isFirstWeek = week === Math.min(...unit.weeks);
-                    html += this.renderUnitBlock(unit, week, isFirstWeek);
-                });
-            }
-            
-            // Render custom tiles for custom lane
-            if (lane.id === 'custom') {
-                const customTilesInWeek = this.customTiles.filter(tile => tile.week === week);
-                customTilesInWeek.forEach(tile => {
-                    html += this.renderCustomTile(tile);
-                });
-            }
-
-            if (unitsInWeek.length === 0 && customTilesInWeek.length === 0 && !isBlocked) {
-                html += `<div class="empty-slot">${this.isStudentView ? 'No items' : 'Drag unit or click + to add tile'}</div>`;
-            }
-
-            html += `</div>`;
-        }
-
-        html += `</div></div>`;
-    });
-
-    html += `</div>`;
-    
-    // CRITICAL FIX: Ensure container still exists before setting innerHTML
-    const currentContainer = document.getElementById('timelineContent');
-    if (currentContainer) {
-        currentContainer.innerHTML = html;
-        console.log('Timeline rendered successfully');
-    } else {
-        console.error('Timeline container disappeared during rendering');
+    // Add drag event listeners
+    const unitItems = container.querySelectorAll('.unit-item');
+    if (unitItems.length === 0) {
+        console.warn('No unit items created');
         return;
     }
-
-    // Add project markers to the custom lane
-    setTimeout(() => {
-        this.renderProjectMarkers();
-    }, 50);
-
-    // Add event listeners
-    this.setupTimelineEvents();
     
-    // Add term click handlers
-    if (!this.isStudentView) {
-        const termHeaders = document.querySelectorAll('.term-header');
-        termHeaders.forEach(header => {
-            header.addEventListener('click', (e) => {
-                const termNumber = parseInt(e.currentTarget.dataset.term);
-                this.openTermModal(termNumber);
-            });
+    unitItems.forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            try {
+                const template = JSON.parse(e.currentTarget.dataset.template);
+                this.draggedFromPalette = true;
+                this.draggedUnit = template;
+                e.dataTransfer.setData('text/plain', JSON.stringify(template));
+                e.currentTarget.classList.add('dragging');
+            } catch (error) {
+                console.error('Drag start failed:', error);
+            }
         });
-    }
+
+        item.addEventListener('dragend', (e) => {
+            e.currentTarget.classList.remove('dragging');
+            this.draggedFromPalette = false;
+            this.draggedUnit = null;
+        });
+    });
     
-    // Apply highlighting if enabled
-    if (!this.isStudentView) {
-        const highlightMode = document.getElementById('highlightMode');
-        if (highlightMode && highlightMode.value !== 'none') {
-            this.applyHighlighting(highlightMode.value);
-        }
-    }
+    console.log('Unit palette rendered with', unitItems.length, 'items');
 }
 ```
 
-Also, ensure your getTermForWeek method is working correctly. Add this validation to it:
+Fix 2: Update the init() method to ensure proper loading
+
+Replace your init() method with this:
 
 ```javascript
-getTermForWeek(week) {
-    if (!this.courseData || !this.courseData.terms) return null;
+init() {
+    console.log('Initializing CoursePlanner...');
     
-    return this.courseData.terms.find(term => {
-        if (!term || !term.startWeek || !term.weeks) return false;
-        return week >= term.startWeek && week < term.startWeek + term.weeks;
-    });
+    try {
+        // First, check if critical DOM elements exist
+        const criticalElements = ['timelineContent', 'unitPalette', 'courseTitle'];
+        const missingElements = criticalElements.filter(id => !document.getElementById(id));
+        
+        if (missingElements.length > 0) {
+            console.warn('Missing DOM elements:', missingElements);
+            // Wait for DOM to be fully loaded
+            if (document.readyState !== 'complete') {
+                window.addEventListener('load', () => this.init());
+                return;
+            }
+        }
+        
+        // Load data
+        this.loadInitialData();
+        
+        // Set up event listeners
+        this.setupEventListeners();
+        
+        // Force a small delay to ensure DOM is ready
+        setTimeout(() => {
+            // Check if containers exist before rendering
+            const timelineContainer = document.getElementById('timelineContent');
+            const unitPaletteContainer = document.getElementById('unitPalette');
+            
+            if (timelineContainer && unitPaletteContainer) {
+                console.log('DOM ready, rendering...');
+                this.renderEverything();
+                this.setupStudentViewIfNeeded();
+                this.setupKeyboardShortcuts();
+                this.hideLoadingScreen();
+            } else {
+                console.error('Critical containers missing after timeout');
+                console.log('timelineContainer exists:', !!timelineContainer);
+                console.log('unitPaletteContainer exists:', !!unitPaletteContainer);
+                this.hideLoadingScreen();
+                this.showToast('Error: Could not load page properly. Please refresh.', 'error');
+            }
+        }, 100);
+        
+    } catch (error) {
+        console.error('Fatal error in init:', error);
+        this.hideLoadingScreen();
+        this.showToast('Error loading application: ' + error.message, 'error');
+    }
 }
 ```
 
-The main issue was that the renderTimeline() method wasn't properly handling cases where:
+Fix 3: Update the renderEverything() method
 
-1. The DOM elements weren't ready
-2. The total weeks or terms data was invalid
-3. The container disappeared during rendering
+Replace your current renderEverything() with:
 
-These fixes add proper error handling, validation, and retry logic to ensure the timeline renders correctly.
+```javascript
+renderEverything() {
+    console.log('renderEverything called');
+    
+    // Check if critical containers exist
+    const unitPaletteContainer = document.getElementById('unitPalette');
+    const timelineContainer = document.getElementById('timelineContent');
+    
+    if (!unitPaletteContainer) {
+        console.error('Unit palette container not found');
+        return;
+    }
+    
+    if (!timelineContainer) {
+        console.error('Timeline container not found');
+        return;
+    }
+    
+    // Ensure we have valid data
+    if (!this.courseData || !this.courseData.totalWeeks) {
+        console.error('Invalid course data');
+        this.loadDefaultData();
+    }
+    
+    // Render everything
+    try {
+        this.renderUnitPalette();
+        this.renderTimeline();
+        this.renderSavedPlans();
+        this.updateTotalWeeksDisplay();
+        
+        if (this.isStudentView) {
+            this.renderStudentTermOverviews();
+        }
+        
+        console.log('renderEverything completed successfully');
+    } catch (error) {
+        console.error('Error in renderEverything:', error);
+        this.showToast('Error rendering content: ' + error.message, 'error');
+        
+        // Show error in timeline
+        if (timelineContainer) {
+            timelineContainer.innerHTML = '<div style="padding: 40px; text-align: center; color: #ff6b6b;">Error loading timeline. Please refresh the page.</div>';
+        }
+    }
+}
+```
+
+Fix 4: Add this debug method to check what's happening
+
+Add this method to your class to help debug:
+
+```javascript
+debugRender() {
+    console.log('=== DEBUG RENDER INFO ===');
+    console.log('isStudentView:', this.isStudentView);
+    console.log('Total weeks:', this.courseData?.totalWeeks);
+    console.log('Terms:', this.courseData?.terms?.length);
+    console.log('Units:', this.units?.length);
+    console.log('Custom tiles:', this.customTiles?.length);
+    console.log('DOM elements:');
+    console.log('  - timelineContent:', !!document.getElementById('timelineContent'));
+    console.log('  - unitPalette:', !!document.getElementById('unitPalette'));
+    console.log('  - viewMode:', !!document.getElementById('viewMode'));
+    console.log('View mode value:', document.getElementById('viewMode')?.value);
+    console.log('========================');
+}
+```
+
+Fix 5: Call debug in init
+
+Add this line in your init() method after loading data:
+
+```javascript
+this.debugRender(); // Add this after loadInitialData()
+```
+
+Most Likely Issue
+
+The most critical issue is that your renderUnitPalette() is failing because this.unitTemplates might not be properly defined when the method runs. Also, the renderTimeline() depends on the view mode selector which might not exist yet.
+
+After applying these fixes, open your browser's console (F12) and look for the debug output. This will tell us exactly where the failure is occurring. The timeline should now render properly.
