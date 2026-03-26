@@ -1,4 +1,5 @@
-// ========== COMPLETE JAVASCRIPT - FULLY FUNCTIONAL ==========
+<script>
+// ========== COMPLETE FIXED JAVASCRIPT ==========
 const CONFIG = { 
     APP_VERSION: '3.3.0', 
     SHARED_STORAGE_KEY: 'course_planner_shared_v33', 
@@ -101,7 +102,6 @@ class CoursePlanner {
     }
 
     loadFromData(data) {
-        // Handle version compatibility
         if (data.units) {
             this.units = JSON.parse(JSON.stringify(data.units));
         } else {
@@ -111,7 +111,6 @@ class CoursePlanner {
         if (data.blockedWeeks) this.blockedWeeks = JSON.parse(JSON.stringify(data.blockedWeeks));
         if (data.customColors) this.customColors = JSON.parse(JSON.stringify(data.customColors));
         
-        // Ensure all units have assessmentDue property
         this.units.forEach(unit => {
             if (unit.assessmentDue === undefined) unit.assessmentDue = false;
             if (!unit.weeks || unit.weeks.length === 0) unit.weeks = [1];
@@ -120,7 +119,6 @@ class CoursePlanner {
             if (!unit.color) unit.color = 'foundational';
         });
         
-        // Ensure project milestones have IDs
         if (this.courseData.projectMilestones) {
             this.courseData.projectMilestones = this.courseData.projectMilestones.map((m,i) => ({ ...m, id: m.id || `milestone-${i+1}` }));
         }
@@ -130,39 +128,20 @@ class CoursePlanner {
         this.units = JSON.parse(JSON.stringify(this.defaultUnits)); 
         this.blockedWeeks = {}; 
         this.customColors = {};
-        this.courseData = {
-            totalWeeks: CONFIG.DEFAULT_TOTAL_WEEKS, 
-            terms: [
-                { number: 1, weeks: 10, startWeek: 1, name: "Safety, Foundations & Summer Harvest" },
-                { number: 2, weeks: 10, startWeek: 11, name: "Practical Skills & Application" },
-                { number: 3, weeks: 10, startWeek: 21, name: "Machinery & Advanced Integration" },
-                { number: 4, weeks: 7, startWeek: 31, name: "Apex Units & Finalisation" }
-            ], 
-            projectMilestones: [
-                { id: 'milestone-1', week: 18, label: "Project Start" },
-                { id: 'milestone-2', week: 25, label: "Phase 2" },
-                { id: 'milestone-3', week: 30, label: "Integration" },
-                { id: 'milestone-4', week: 34, label: "Final Phase" }
-            ]
-        };
     }
 
     saveData() {
         try {
-            const dataToSave = { 
+            localStorage.setItem(CONFIG.SHARED_STORAGE_KEY, JSON.stringify({ 
                 version: CONFIG.APP_VERSION, 
                 lastUpdate: new Date().toISOString(), 
-                units: JSON.parse(JSON.stringify(this.units)), 
-                courseData: JSON.parse(JSON.stringify(this.courseData)), 
-                blockedWeeks: JSON.parse(JSON.stringify(this.blockedWeeks)), 
-                customColors: JSON.parse(JSON.stringify(this.customColors)) 
-            };
-            localStorage.setItem(CONFIG.SHARED_STORAGE_KEY, JSON.stringify(dataToSave));
+                units: this.units, 
+                courseData: this.courseData, 
+                blockedWeeks: this.blockedWeeks, 
+                customColors: this.customColors 
+            }));
             return true;
-        } catch(e) { 
-            console.error('Save error:', e);
-            return false; 
-        }
+        } catch(e) { return false; }
     }
 
     saveHistory() {
@@ -195,7 +174,7 @@ class CoursePlanner {
     renderUnitBlock(unit, week, isFirstWeek) {
         const bgColor = this.getUnitColor(unit);
         const assessmentBadge = unit.assessmentDue && isFirstWeek ? '<div class="assessment-badge">📋 ASSESSMENT</div>' : '';
-        return `<div class="unit-block" data-unit-id="${unit.id}" data-week="${week}" style="background:${bgColor}; cursor:${this.isStudentView?'pointer':'move'};" draggable="${!this.isStudentView}">${assessmentBadge}<div class="unit-code">${escapeHtml(unit.code)}</div>${isFirstWeek?`<div class="unit-name">${escapeHtml(unit.name)}</div>`:''}${unit.weeks.length>1&&isFirstWeek?`<div class="unit-duration">${unit.weeks.length}w</div>`:''}</div>`;
+        return `<div class="unit-block" data-unit-id="${unit.id}" data-week="${week}" style="background:${bgColor}; cursor:${this.isStudentView?'pointer':'move'};" draggable="${!this.isStudentView}">${assessmentBadge}<div class="unit-code">${this.escapeHtml(unit.code)}</div>${isFirstWeek?`<div class="unit-name">${this.escapeHtml(unit.name)}</div>`:''}${unit.weeks.length>1&&isFirstWeek?`<div class="unit-duration">${unit.weeks.length}w</div>`:''}</div>`;
     }
 
     renderTimeline() {
@@ -206,22 +185,20 @@ class CoursePlanner {
         document.documentElement.style.setProperty('--week-width', `${weekWidth}px`);
         let html = `<div class="term-headers"><div class="term-spacer"></div>`;
         terms.forEach(term => { 
-            html += `<div class="term-header" data-term="${term.number}" style="width:${term.weeks*weekWidth}px; ${!this.isStudentView?'cursor:pointer;':''}">Term ${term.number}<div style="font-size:12px;">${escapeHtml(term.name)}</div></div>`; 
+            html += `<div class="term-header" data-term="${term.number}" style="width:${term.weeks*weekWidth}px;">Term ${term.number}<div style="font-size:12px;">${this.escapeHtml(term.name)}</div></div>`; 
         });
         html += `</div><div class="week-headers"><div class="week-spacer"></div>`;
         for (let w=1; w<=totalWeeks; w++) html += `<div class="week-header" style="width:${weekWidth}px;"><div class="week-number">Week ${w}</div></div>`;
         html += `</div><div class="timeline-grid">`;
-        const lanes = this.currentView === 'teacher' ? [{ id:'main', label:'Main Teacher'},{ id:'other', label:'Other Teacher'}] : [{ id:'core', label:'Core Units'},{ id:'specialist', label:'Specialist Units'},{ id:'apex', label:'Assessment & Apex'}];
+        const lanes = [{ id:'core', label:'Core Units'},{ id:'specialist', label:'Specialist Units'},{ id:'apex', label:'Assessment & Apex'}];
         lanes.forEach(lane => {
             html += `<div class="swimlane"><div class="lane-label">${lane.label}</div><div class="lane-content" data-lane-id="${lane.id}">`;
             for (let w=1; w<=totalWeeks; w++) {
                 const isBlocked = this.blockedWeeks[w];
                 html += `<div class="week-slot ${isBlocked?'blocked-week':''}" data-week="${w}" data-lane="${lane.id}" style="width:${weekWidth}px;">`;
-                if (isBlocked) html += `<div style="position:absolute;top:5px;left:5px;font-size:10px;color:white;background:rgba(0,0,0,0.3);padding:2px 5px;">BLOCKED</div>`;
+                if (isBlocked) html += `<div style="position:absolute;top:5px;left:5px;font-size:10px;background:rgba(0,0,0,0.5);color:white;padding:2px 5px;">BLOCKED</div>`;
                 const unitsHere = this.units.filter(u => u.weeks.includes(w) && 
-                    ((lane.id==='main' && u.teacher==='main' && !u.assessmentDue) || 
-                     (lane.id==='other' && u.teacher==='other') || 
-                     (lane.id==='core' && u.teacher==='main' && !u.assessmentDue && u.code!=='INTEGRATION') || 
+                    ((lane.id==='core' && u.teacher==='main' && !u.assessmentDue) || 
                      (lane.id==='specialist' && u.teacher==='other') || 
                      (lane.id==='apex' && (u.assessmentDue || u.tags?.includes('APEX')))));
                 if (unitsHere.length) {
@@ -240,8 +217,6 @@ class CoursePlanner {
         container.innerHTML = html;
         this.renderProjectMarkers();
         this.setupTimelineEvents();
-        const hm = document.getElementById('highlightMode');
-        if (hm && hm.value !== 'none') this.applyHighlighting(hm.value);
     }
 
     renderProjectMarkers() {
@@ -277,41 +252,21 @@ class CoursePlanner {
         });
     }
 
-    applyHighlighting(mode) {
-        if (this.isStudentView) return;
-        document.querySelectorAll('.unit-block').forEach(b => b.style.boxShadow = '');
-        if (mode === 'none') return;
-        let ids = [];
-        if (mode === 'assessment') ids = this.units.filter(u => u.assessmentDue).map(u=>u.id);
-        else if (mode === 'specialist') ids = this.units.filter(u => u.tags?.includes('SPECIALIST')).map(u=>u.id);
-        else if (mode === 'safety') ids = this.units.filter(u => u.tags?.includes('SAFETY')).map(u=>u.id);
-        else if (mode === 'seasonal') ids = this.units.filter(u => u.tags?.includes('SEASONAL')).map(u=>u.id);
-        document.querySelectorAll('.unit-block').forEach(b => { if(ids.includes(b.dataset.unitId)) b.style.boxShadow = '0 0 0 3px gold'; });
-    }
-
     addAssessmentUnit() {
         const week = parseInt(prompt('Enter week for assessment task (1-'+this.courseData.totalWeeks+'):', '1'));
-        if (isNaN(week) || week < 1 || week > this.courseData.totalWeeks) { this.showToast('Invalid week','error'); return; }
+        if (isNaN(week)) return;
         const code = prompt('Assessment code:', `ASSESS${Date.now().toString().slice(-4)}`);
         if (!code) return;
         const name = prompt('Assessment name:', 'Assessment Task');
         if (!name) return;
         this.saveHistory();
-        const newUnit = { 
-            id: Date.now().toString(), 
-            code: code, 
-            name: name, 
-            weeks: [week], 
-            color: 'assessment', 
-            tags: ['ASSESSMENT'], 
-            teacher: 'main', 
-            notes: 'Assessment task due', 
-            assessmentDue: true 
-        };
-        this.units.push(newUnit);
+        this.units.push({ 
+            id: Date.now().toString(), code, name, weeks: [week], color: 'assessment', 
+            tags: ['ASSESSMENT'], teacher: 'main', notes: 'Assessment task due', assessmentDue: true 
+        });
         this.renderEverything();
         this.saveData();
-        this.showToast(`Assessment "${name}" added to week ${week}`, 'success');
+        this.showToast(`Assessment added to week ${week}`, 'success');
     }
 
     openUnitModal(unitId) {
@@ -322,27 +277,17 @@ class CoursePlanner {
         const modalBody = document.getElementById('modalBody');
         document.getElementById('modalTitle').textContent = `Edit: ${unit.code}`;
         modalBody.innerHTML = `
-            <div><div class="form-group"><label>Code</label><input id="editCode" value="${escapeHtml(unit.code)}"></div>
-            <div class="form-group"><label>Name</label><input id="editName" value="${escapeHtml(unit.name)}"></div>
-            <div class="form-group"><label>Weeks (comma or range e.g., 5-7)</label><input id="editWeeks" value="${unit.weeks.join(',')}"></div>
-            <div class="form-group"><label>Assessment Task</label><select id="editAssessment"><option value="true" ${unit.assessmentDue?'selected':''}>Yes (Orange badge)</option><option value="false" ${!unit.assessmentDue?'selected':''}>No</option></select></div>
-            <div class="form-group"><label>Teacher</label><select id="editTeacher"><option value="main" ${unit.teacher==='main'?'selected':''}>Main Teacher</option><option value="other" ${unit.teacher==='other'?'selected':''}>Other Teacher</option></select></div>
-            <div class="form-group"><label>Custom Color (hex)</label><input type="color" id="editColor" value="${this.getUnitColor(unit)}"></div>
-            <div class="form-group"><label>Notes</label><textarea id="editNotes" rows="3">${escapeHtml(unit.notes||'')}</textarea></div>
-            <div style="display:flex;gap:10px;margin-top:20px;"><button id="saveUnitBtn" class="primary">Save</button><button id="deleteUnitBtn" class="warning">Delete</button><button id="cancelUnitBtn">Cancel</button></div></div>`;
+            <div><div class="form-group"><label>Code</label><input id="editCode" value="${this.escapeHtml(unit.code)}"></div>
+            <div class="form-group"><label>Name</label><input id="editName" value="${this.escapeHtml(unit.name)}"></div>
+            <div class="form-group"><label>Weeks</label><input id="editWeeks" value="${unit.weeks.join(',')}"></div>
+            <div class="form-group"><label>Assessment Task</label><select id="editAssessment"><option value="true" ${unit.assessmentDue?'selected':''}>Yes</option><option value="false" ${!unit.assessmentDue?'selected':''}>No</option></select></div>
+            <div class="form-group"><label>Teacher</label><select id="editTeacher"><option value="main" ${unit.teacher==='main'?'selected':''}>Main</option><option value="other" ${unit.teacher==='other'?'selected':''}>Other</option></select></div>
+            <div class="form-group"><label>Custom Color</label><input type="color" id="editColor" value="${this.getUnitColor(unit)}"></div>
+            <div class="form-group"><label>Notes</label><textarea id="editNotes">${this.escapeHtml(unit.notes||'')}</textarea></div>
+            <div style="display:flex;gap:10px;"><button id="saveUnitBtn" class="primary">Save</button><button id="deleteUnitBtn" class="warning">Delete</button><button id="cancelUnitBtn">Cancel</button></div></div>`;
         modal.style.display = 'flex';
-        
         document.getElementById('saveUnitBtn').onclick = () => { this.saveUnitChanges(unitId); modal.style.display = 'none'; };
-        document.getElementById('deleteUnitBtn').onclick = () => { 
-            if(confirm('Delete this unit?')){ 
-                this.saveHistory(); 
-                this.units = this.units.filter(u=>u.id!==unitId); 
-                this.renderEverything(); 
-                this.saveData();
-                this.showToast('Deleted','success'); 
-                modal.style.display='none'; 
-            } 
-        };
+        document.getElementById('deleteUnitBtn').onclick = () => { if(confirm('Delete?')){ this.saveHistory(); this.units = this.units.filter(u=>u.id!==unitId); this.renderEverything(); this.saveData(); modal.style.display='none'; } };
         document.getElementById('cancelUnitBtn').onclick = () => modal.style.display = 'none';
     }
 
@@ -357,8 +302,7 @@ class CoursePlanner {
             const [s,e]=weeksStr.split('-').map(Number); 
             unit.weeks = Array.from({length:e-s+1},(_,i)=>s+i); 
         } else { 
-            unit.weeks = weeksStr.split(',').map(w=>parseInt(w.trim())).filter(w=>!isNaN(w) && w>0);
-            if (unit.weeks.length === 0) unit.weeks = [1];
+            unit.weeks = weeksStr.split(',').map(w=>parseInt(w.trim())).filter(w=>!isNaN(w));
         }
         unit.assessmentDue = document.getElementById('editAssessment').value === 'true';
         unit.teacher = document.getElementById('editTeacher').value;
@@ -367,7 +311,6 @@ class CoursePlanner {
         else delete this.customColors[unit.id];
         unit.notes = document.getElementById('editNotes').value;
         if (unit.assessmentDue) unit.color = 'assessment';
-        else if (!unit.color || unit.color === 'assessment') unit.color = 'foundational';
         this.renderEverything();
         this.saveData();
         this.showToast('Unit updated','success');
@@ -387,12 +330,9 @@ class CoursePlanner {
 
     setupStudentViewIfNeeded() { if (this.isStudentView) this.setupStudentView(); }
 
-    generateShareLink() { this.saveData(); return window.location.origin + window.location.pathname + `?student=true&v=${Date.now()}`; }
-
     sharePlan() {
-        if (this.isStudentView) return;
         this.saveData();
-        const url = this.generateShareLink();
+        const url = window.location.origin + window.location.pathname + `?student=true&v=${Date.now()}`;
         document.getElementById('shareLink').value = url;
         document.getElementById('sharePanel').classList.add('show');
     }
@@ -404,15 +344,15 @@ class CoursePlanner {
         const modalBody = document.getElementById('modalBody');
         document.getElementById('modalTitle').textContent = `${unit.code} - ${unit.name}`;
         modalBody.innerHTML = `
-            <div><div style="background:#f8f9fa;padding:15px;border-radius:8px;margin-bottom:15px;">
-            <div><strong>Weeks:</strong> ${Math.min(...unit.weeks)}-${Math.max(...unit.weeks)} (${unit.weeks.length} week${unit.weeks.length>1?'s':''})</div>
-            <div><strong>Teacher:</strong> ${unit.teacher==='other'?'Other Teacher':'Main Teacher'}</div>
-            ${unit.assessmentDue?'<div style="color:#e67e22;font-weight:bold;margin-top:8px;">📋 ASSESSMENT TASK DUE</div>':''}
-            ${unit.notes?`<div style="margin-top:12px;"><strong>Notes:</strong> ${escapeHtml(unit.notes)}</div>`:''}
+            <div><div style="background:#f8f9fa;padding:15px;border-radius:8px;">
+            <div><strong>Weeks:</strong> ${Math.min(...unit.weeks)}-${Math.max(...unit.weeks)}</div>
+            <div><strong>Teacher:</strong> ${unit.teacher==='other'?'Other':'Main'}</div>
+            ${unit.assessmentDue?'<div style="color:#e67e22;font-weight:bold;">📋 ASSESSMENT DUE</div>':''}
+            ${unit.notes?`<div><strong>Notes:</strong> ${this.escapeHtml(unit.notes)}</div>`:''}
             </div>
-            <button id="closeStudentModal" style="width:100%;padding:10px;background:#0984e3;color:white;border:none;border-radius:6px;cursor:pointer;">Close</button></div>`;
+            <button id="closeStudentModal" style="margin-top:15px;width:100%;padding:10px;background:#0984e3;color:white;border:none;">Close</button></div>`;
         modal.style.display = 'flex';
-        document.getElementById('closeStudentModal').onclick = () => { modal.style.display = 'none'; };
+        document.getElementById('closeStudentModal').onclick = () => modal.style.display = 'none';
         modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
     }
 
@@ -422,7 +362,7 @@ class CoursePlanner {
         this.saveHistory();
         const unit = this.units[idx];
         unit.weeks = [week];
-        if (lane === 'specialist' || lane === 'other') unit.teacher = 'other';
+        if (lane === 'specialist') unit.teacher = 'other';
         else unit.teacher = 'main';
         this.renderEverything();
         this.saveData();
@@ -430,21 +370,20 @@ class CoursePlanner {
 
     addUnitFromTemplate(template, week, lane) {
         this.saveHistory();
-        const newUnit = { 
+        this.units.push({ 
             id: Date.now().toString(), 
             code: template.code === 'CUSTOM' ? `CUST${Date.now()}` : template.code, 
             name: template.name, 
             weeks: [week], 
             color: template.color === 'assessment' ? 'assessment' : (template.color || 'foundational'),
             tags: [...(template.tags||[])], 
-            teacher: (lane === 'specialist' || lane === 'other') ? 'other' : 'main', 
+            teacher: lane === 'specialist' ? 'other' : 'main', 
             notes: '', 
             assessmentDue: template.color === 'assessment' 
-        };
-        this.units.push(newUnit);
+        });
         this.renderEverything();
         this.saveData();
-        this.showToast(`Added ${newUnit.code} to week ${week}`, 'success');
+        this.showToast(`Added to week ${week}`, 'success');
     }
 
     setupTimelineEvents() {
@@ -460,9 +399,7 @@ class CoursePlanner {
             if (!this.isStudentView) {
                 block.addEventListener('dragstart', e => { 
                     e.dataTransfer.setData('text/plain', JSON.stringify({ type:'move', unitId: block.dataset.unitId })); 
-                    block.classList.add('dragging'); 
                 });
-                block.addEventListener('dragend', e => block.classList.remove('dragging'));
             }
         });
         if (!this.isStudentView) {
@@ -496,13 +433,9 @@ class CoursePlanner {
             { code: 'ASSESSMENT', name: '📋 Assessment Task', color: 'assessment', tags: ['ASSESSMENT'] },
             { code: 'CUSTOM', name: 'Custom Unit', color: 'foundational', tags: ['CUSTOM'] }
         ];
-        c.innerHTML = templates.map(t => `<div class="unit-item" draggable="true" data-template='${JSON.stringify(t)}' style="border-left:4px solid ${this.colorMap[t.color]||'#4ecdc4'}"><div class="unit-code">${escapeHtml(t.code)}</div><div class="unit-name">${escapeHtml(t.name)}</div></div>`).join('');
+        c.innerHTML = templates.map(t => `<div class="unit-item" draggable="true" data-template='${JSON.stringify(t)}' style="border-left:4px solid ${this.colorMap[t.color]||'#4ecdc4'}"><div class="unit-code">${t.code}</div><div class="unit-name">${t.name}</div></div>`).join('');
         c.querySelectorAll('.unit-item').forEach(i => {
-            i.addEventListener('dragstart', e => { 
-                e.dataTransfer.setData('text/plain', JSON.stringify(JSON.parse(i.dataset.template))); 
-                i.classList.add('dragging'); 
-            });
-            i.addEventListener('dragend', e => i.classList.remove('dragging'));
+            i.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', JSON.stringify(JSON.parse(i.dataset.template))); });
         });
     }
 
@@ -512,24 +445,16 @@ class CoursePlanner {
         if (!c) return;
         try {
             const plans = JSON.parse(localStorage.getItem('cet_plans')||'[]');
-            if (!plans.length) { c.innerHTML = '<p style="color:#666;">No saved plans. Click "Save Plan" to create one.</p>'; return; }
-            c.innerHTML = plans.map(p => `<div style="padding:10px;margin-bottom:10px;background:#f8f9fa;border-radius:6px;border-left:4px solid #0984e3;"><div><strong>${escapeHtml(p.name)}</strong></div><div style="font-size:12px;color:#666;">${new Date(p.date).toLocaleDateString()} • ${p.units?.length||0} units</div><div style="display:flex;gap:5px;margin-top:8px;"><button onclick="window.app.loadPlan('${p.id}')" style="flex:1;background:#0984e3;color:white;border:none;padding:5px;border-radius:4px;cursor:pointer;">Load</button><button onclick="window.app.deletePlan('${p.id}')" style="flex:1;background:#ff6b6b;color:white;border:none;padding:5px;border-radius:4px;cursor:pointer;">Delete</button></div></div>`).join('');
-        } catch(e) { c.innerHTML = '<p style="color:#666;">Error loading saved plans.</p>'; }
+            if (!plans.length) { c.innerHTML = '<p>No saved plans. Click "Save Plan" to create one.</p>'; return; }
+            c.innerHTML = plans.map(p => `<div style="padding:10px;margin-bottom:10px;background:#f8f9fa;border-radius:6px;"><div><strong>${this.escapeHtml(p.name)}</strong></div><div style="font-size:12px;">${new Date(p.date).toLocaleDateString()} • ${p.units?.length||0} units</div><div style="display:flex;gap:5px;margin-top:8px;"><button onclick="window.app.loadPlan('${p.id}')" style="flex:1;background:#0984e3;color:white;border:none;padding:5px;">Load</button><button onclick="window.app.deletePlan('${p.id}')" style="flex:1;background:#ff6b6b;color:white;border:none;padding:5px;">Delete</button></div></div>`).join('');
+        } catch(e) { c.innerHTML = '<p>Error loading plans</p>'; }
     }
 
     savePlan() {
         const name = prompt('Plan name:', `Plan ${new Date().toLocaleDateString()}`);
         if (!name) return;
         const plans = JSON.parse(localStorage.getItem('cet_plans')||'[]');
-        plans.push({ 
-            id: Date.now().toString(), 
-            name, 
-            date: new Date().toISOString(), 
-            units: JSON.parse(JSON.stringify(this.units)), 
-            courseData: JSON.parse(JSON.stringify(this.courseData)), 
-            blockedWeeks: JSON.parse(JSON.stringify(this.blockedWeeks)), 
-            customColors: JSON.parse(JSON.stringify(this.customColors)) 
-        });
+        plans.push({ id: Date.now().toString(), name, date: new Date().toISOString(), units: this.units, courseData: this.courseData, blockedWeeks: this.blockedWeeks, customColors: this.customColors });
         localStorage.setItem('cet_plans', JSON.stringify(plans));
         this.renderSavedPlans();
         this.showToast(`Plan "${name}" saved`, 'success');
@@ -551,15 +476,15 @@ class CoursePlanner {
     }
 
     deletePlan(id) {
-        if(!confirm('Delete this saved plan?')) return;
+        if(!confirm('Delete plan?')) return;
         let plans = JSON.parse(localStorage.getItem('cet_plans')||'[]');
         plans = plans.filter(p=>p.id!==id);
         localStorage.setItem('cet_plans', JSON.stringify(plans));
         this.renderSavedPlans();
-        this.showToast('Plan deleted','success');
+        this.showToast('Deleted','success');
     }
 
-    // FIXED: JSON Import functionality - fully working
+    // IMPORT FUNCTION - FIXED AND WORKING
     importPlanFromFile() {
         const fileInput = document.getElementById('importPlan');
         if (!fileInput || !fileInput.files.length) {
@@ -575,46 +500,29 @@ class CoursePlanner {
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                const importedData = JSON.parse(e.target.result);
-                // Validate imported data
-                if (!importedData.units && !importedData.courseData) {
-                    this.showToast('Invalid plan file: missing required data', 'error');
+                const imported = JSON.parse(e.target.result);
+                if (!imported.units) {
+                    this.showToast('Invalid file: missing units data', 'error');
                     return;
                 }
                 this.saveHistory();
-                // Load units
-                if (importedData.units && Array.isArray(importedData.units)) {
-                    this.units = JSON.parse(JSON.stringify(importedData.units));
-                    // Ensure all units have required properties
-                    this.units.forEach(unit => {
-                        if (unit.assessmentDue === undefined) unit.assessmentDue = false;
-                        if (!unit.weeks) unit.weeks = [1];
-                        if (!unit.tags) unit.tags = [];
-                        if (!unit.teacher) unit.teacher = 'main';
-                        if (!unit.color && unit.assessmentDue) unit.color = 'assessment';
-                        if (!unit.color) unit.color = 'foundational';
-                        if (!unit.id) unit.id = Date.now().toString() + Math.random();
-                    });
-                }
-                // Load course data
-                if (importedData.courseData) {
-                    this.courseData = JSON.parse(JSON.stringify(importedData.courseData));
-                    if (!this.courseData.projectMilestones) this.courseData.projectMilestones = [];
-                    if (!this.courseData.terms) this.courseData.terms = this.defaultCourseData().terms;
-                    if (!this.courseData.totalWeeks) this.courseData.totalWeeks = CONFIG.DEFAULT_TOTAL_WEEKS;
-                }
-                // Load blocked weeks
-                if (importedData.blockedWeeks) this.blockedWeeks = JSON.parse(JSON.stringify(importedData.blockedWeeks));
-                // Load custom colors
-                if (importedData.customColors) this.customColors = JSON.parse(JSON.stringify(importedData.customColors));
+                this.units = JSON.parse(JSON.stringify(imported.units));
+                if (imported.courseData) this.courseData = JSON.parse(JSON.stringify(imported.courseData));
+                if (imported.blockedWeeks) this.blockedWeeks = JSON.parse(JSON.stringify(imported.blockedWeeks));
+                if (imported.customColors) this.customColors = JSON.parse(JSON.stringify(imported.customColors));
+                
+                this.units.forEach(u => {
+                    if (u.assessmentDue === undefined) u.assessmentDue = false;
+                    if (!u.weeks) u.weeks = [1];
+                    if (!u.id) u.id = Date.now().toString() + Math.random();
+                });
                 
                 this.renderEverything();
                 this.saveData();
-                this.showToast(`Successfully imported ${this.units.length} units`, 'success');
+                this.showToast(`Imported ${this.units.length} units successfully`, 'success');
                 fileInput.value = '';
-            } catch (error) {
-                console.error('Import error:', error);
-                this.showToast('Failed to import: Invalid JSON format', 'error');
+            } catch (err) {
+                this.showToast('Invalid JSON file', 'error');
                 fileInput.value = '';
             }
         };
@@ -625,128 +533,67 @@ class CoursePlanner {
         reader.readAsText(file);
     }
 
-    defaultCourseData() {
-        return {
-            totalWeeks: CONFIG.DEFAULT_TOTAL_WEEKS, 
-            terms: [
-                { number: 1, weeks: 10, startWeek: 1, name: "Safety, Foundations & Summer Harvest" },
-                { number: 2, weeks: 10, startWeek: 11, name: "Practical Skills & Application" },
-                { number: 3, weeks: 10, startWeek: 21, name: "Machinery & Advanced Integration" },
-                { number: 4, weeks: 7, startWeek: 31, name: "Apex Units & Finalisation" }
-            ], 
-            projectMilestones: []
-        };
-    }
-
     exportPlan() {
-        const data = { 
-            version: CONFIG.APP_VERSION, 
-            exportDate: new Date().toISOString(),
-            units: JSON.parse(JSON.stringify(this.units)), 
-            courseData: JSON.parse(JSON.stringify(this.courseData)), 
-            blockedWeeks: JSON.parse(JSON.stringify(this.blockedWeeks)), 
-            customColors: JSON.parse(JSON.stringify(this.customColors)) 
-        };
+        const data = { version: CONFIG.APP_VERSION, exportDate: new Date().toISOString(), units: this.units, courseData: this.courseData, blockedWeeks: this.blockedWeeks, customColors: this.customColors };
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}));
         a.download = `course-plan-${new Date().toISOString().split('T')[0]}.json`;
         a.click();
-        URL.revokeObjectURL(a.href);
-        this.showToast('Plan exported successfully', 'success');
+        this.showToast('Exported', 'success');
     }
 
     exportAsList() {
-        let text = `COURSE SCHEDULE - CERT III CONSERVATION & ECOSYSTEM MANAGEMENT\n`;
-        text += `Generated: ${new Date().toLocaleString()}\n`;
-        text += `Total Units: ${this.units.length}\n`;
-        text += `Total Weeks: ${this.courseData.totalWeeks}\n`;
-        text += `${'='.repeat(60)}\n\n`;
-        text += `ASSESSMENT TASKS:\n`;
-        const assessments = this.units.filter(u => u.assessmentDue);
-        if (assessments.length) {
-            assessments.forEach(u => { text += `  • ${u.code}: ${u.name} - Week ${Math.min(...u.weeks)}\n`; });
-        } else { text += `  None\n`; }
-        text += `\nWEEK-BY-WEEK BREAKDOWN:\n`;
-        for (let w = 1; w <= this.courseData.totalWeeks; w++) {
-            const unitsHere = this.units.filter(u => u.weeks.includes(w));
-            if (unitsHere.length) {
-                text += `Week ${w}: ${unitsHere.map(u => `${u.code}${u.assessmentDue ? '📋' : ''}`).join(', ')}\n`;
-            }
+        let text = `COURSE SCHEDULE\nGenerated: ${new Date().toLocaleString()}\n\nASSESSMENT TASKS:\n`;
+        this.units.filter(u=>u.assessmentDue).forEach(u=>{ text += `• ${u.code}: ${u.name} - Week ${Math.min(...u.weeks)}\n`; });
+        text += `\nWEEKLY BREAKDOWN:\n`;
+        for(let w=1; w<=this.courseData.totalWeeks; w++) {
+            const unitsHere = this.units.filter(u=>u.weeks.includes(w));
+            if(unitsHere.length) text += `Week ${w}: ${unitsHere.map(u=>`${u.code}${u.assessmentDue?'📋':''}`).join(', ')}\n`;
         }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([text], {type:'text/plain'}));
         a.download = `schedule-${new Date().toISOString().split('T')[0]}.txt`;
         a.click();
-        this.showToast('Exported as text', 'success');
+        this.showToast('Exported', 'success');
     }
 
     resetToDefault() {
-        if(confirm('Reset to default course sequence? All unsaved changes will be lost.')) { 
+        if(confirm('Reset to default?')) { 
             this.saveHistory(); 
             this.units = JSON.parse(JSON.stringify(this.defaultUnits)); 
             this.blockedWeeks = {}; 
             this.customColors = {};
-            this.courseData = this.defaultCourseData();
-            this.courseData.projectMilestones = [
-                { id: 'milestone-1', week: 18, label: "Project Start" },
-                { id: 'milestone-2', week: 25, label: "Phase 2" },
-                { id: 'milestone-3', week: 30, label: "Integration" },
-                { id: 'milestone-4', week: 34, label: "Final Phase" }
-            ];
             this.renderEverything(); 
             this.saveData();
-            this.showToast('Reset to default sequence', 'success'); 
+            this.showToast('Reset complete', 'success'); 
         }
     }
 
     clearTimetable() {
-        if(confirm('Clear ALL units from the timetable?')) { 
+        if(confirm('Clear all units?')) { 
             this.saveHistory(); 
             this.units = []; 
             this.renderEverything(); 
             this.saveData();
-            this.showToast('All units cleared', 'success'); 
+            this.showToast('Cleared', 'success'); 
         }
     }
 
     applyWeekBlocking() {
         const type = document.getElementById('weekBlocking').value;
         const range = document.getElementById('weekRange').value;
-        if(!type || !range) { this.showToast('Select blocking type and enter week range', 'error'); return; }
+        if(!type || !range) { this.showToast('Select type and range', 'error'); return; }
         let weeks = [];
-        if(range.includes('-')) { 
-            const [s,e]=range.split('-').map(Number); 
-            if(isNaN(s)||isNaN(e)) { this.showToast('Invalid range format', 'error'); return; }
-            weeks = Array.from({length:e-s+1},(_,i)=>s+i); 
-        } else if(range.includes(',')) { 
-            weeks = range.split(',').map(w=>parseInt(w.trim())).filter(w=>!isNaN(w));
-        } else { 
-            weeks = [parseInt(range)];
-        }
-        if(weeks.some(w=>isNaN(w)||w<1||w>this.courseData.totalWeeks)) { 
-            this.showToast('Week numbers out of range', 'error'); 
-            return; 
-        }
+        if(range.includes('-')) { const [s,e]=range.split('-').map(Number); weeks = Array.from({length:e-s+1},(_,i)=>s+i); }
+        else weeks = [parseInt(range)];
         this.saveHistory();
-        weeks.forEach(w=>{ 
-            if(type==='clear') delete this.blockedWeeks[w]; 
-            else this.blockedWeeks[w] = {type, label: type}; 
-        });
+        weeks.forEach(w=>{ if(w>=1&&w<=this.courseData.totalWeeks) { if(type==='clear') delete this.blockedWeeks[w]; else this.blockedWeeks[w] = {type}; } });
         this.renderEverything();
-        this.showToast(`Applied to weeks ${weeks.join(', ')}`, 'success');
+        this.showToast(`Blocked weeks ${weeks.join(',')}`, 'success');
     }
 
-    printFullSchedule() { 
-        document.body.classList.add('pdf-export-mode');
-        setTimeout(()=>{ window.print(); setTimeout(()=>document.body.classList.remove('pdf-export-mode'), 1000); }, 100);
-    }
+    printFullSchedule() { window.print(); }
     
-    printStudentView() { 
-        const wasStudent = this.isStudentView;
-        if(!wasStudent) this.setupStudentView();
-        setTimeout(()=>{ window.print(); if(!wasStudent) { this.isStudentView = false; this.setupStudentViewIfNeeded(); } }, 500);
-    }
-
     renderStudentTermOverviews() {
         const c = document.getElementById('studentTermOverviews');
         if(!c) return;
@@ -756,7 +603,7 @@ class CoursePlanner {
             const unique = new Map();
             termUnits.forEach(u=>{ if(!unique.has(u.id)) unique.set(u.id,u); });
             const sorted = Array.from(unique.values()).sort((a,b)=>Math.min(...a.weeks)-Math.min(...b.weeks));
-            html += `<div class="term-overview"><h3>Term ${term.number}: ${escapeHtml(term.name)}</h3><div class="term-units">${sorted.map(u=>`<div class="term-unit-card"><div style="font-weight:600;color:#0984e3;">${escapeHtml(u.code)}</div><div style="font-size:13px;">${escapeHtml(u.name)}</div>${u.assessmentDue?'<div style="color:#e67e22;font-size:11px;">📋 Assessment Due</div>':''}</div>`).join('')}</div></div>`;
+            html += `<div class="term-overview"><h3>Term ${term.number}: ${this.escapeHtml(term.name)}</h3><div class="term-units">${sorted.map(u=>`<div class="term-unit-card"><div style="font-weight:600;">${this.escapeHtml(u.code)}</div><div>${this.escapeHtml(u.name)}</div>${u.assessmentDue?'<div style="color:#e67e22;">📋 Assessment</div>':''}</div>`).join('')}</div></div>`;
         });
         c.innerHTML = html;
     }
@@ -770,82 +617,44 @@ class CoursePlanner {
         setTimeout(()=>{ toast.style.opacity='0'; setTimeout(()=>toast.remove(),300); }, 3000);
     }
 
-    hideLoadingScreen() { 
-        const l = document.getElementById('loading'); 
-        if(l){ l.style.opacity='0'; setTimeout(()=>l.style.display='none',300); } 
-    }
-    
-    updateTotalWeeksDisplay() { 
-        const d = document.getElementById('totalWeeksDisplay'); 
-        if(d) d.textContent = this.courseData.totalWeeks; 
-    }
+    hideLoadingScreen() { const l = document.getElementById('loading'); if(l){ l.style.opacity='0'; setTimeout(()=>l.style.display='none',300); } }
+    updateTotalWeeksDisplay() { const d = document.getElementById('totalWeeksDisplay'); if(d) d.textContent = this.courseData.totalWeeks; }
+    escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
 
     setupEventListeners() {
-        const toggle = document.getElementById('toggleView');
-        if(toggle) toggle.addEventListener('click',()=>{ if(this.isStudentView) window.location.href=window.location.pathname; else this.sharePlan(); });
-        
-        const share = document.getElementById('sharePlan');
-        if(share) share.addEventListener('click',()=>this.sharePlan());
-        
-        const closeShare = document.getElementById('closeSharePanel');
-        if(closeShare) closeShare.addEventListener('click',()=>document.getElementById('sharePanel').classList.remove('show'));
-        
-        const copyLink = document.getElementById('copyShareLink');
-        if(copyLink) copyLink.addEventListener('click',()=>{ const inp=document.getElementById('shareLink'); inp.select(); navigator.clipboard.writeText(inp.value); this.showToast('Link copied!','success'); });
-        
-        const savePlan = document.getElementById('savePlan');
-        if(savePlan) savePlan.addEventListener('click',()=>this.savePlan());
-        
-        const resetPlan = document.getElementById('resetPlan');
-        if(resetPlan) resetPlan.addEventListener('click',()=>this.resetToDefault());
-        
-        const clearTimetable = document.getElementById('clearTimetable');
-        if(clearTimetable) clearTimetable.addEventListener('click',()=>this.clearTimetable());
-        
-        const printPlan = document.getElementById('printPlan');
-        if(printPlan) printPlan.addEventListener('click',()=>this.printFullSchedule());
-        
-        const exportPlan = document.getElementById('exportPlan');
-        if(exportPlan) exportPlan.addEventListener('click',()=>this.exportPlan());
-        
-        const exportList = document.getElementById('exportList');
-        if(exportList) exportList.addEventListener('click',()=>this.exportAsList());
-        
-        const applyBlock = document.getElementById('applyBlocking');
-        if(applyBlock) applyBlock.addEventListener('click',()=>this.applyWeekBlocking());
-        
-        const addAssessment = document.getElementById('addAssessmentUnit');
-        if(addAssessment) addAssessment.addEventListener('click',()=>this.addAssessmentUnit());
-        
-        const viewMode = document.getElementById('viewMode');
-        if(viewMode) viewMode.addEventListener('change',e=>{ this.currentView = e.target.value; this.renderTimeline(); });
-        
-        const highlightMode = document.getElementById('highlightMode');
-        if(highlightMode) highlightMode.addEventListener('change',e=>this.applyHighlighting(e.target.value));
-        
-        // FIXED: Import button event listener
-        const importBtn = document.getElementById('importPlanBtn');
-        if(importBtn) importBtn.addEventListener('click',()=>this.importPlanFromFile());
-        
-        const addCustom = document.getElementById('addCustomUnit');
-        if(addCustom) addCustom.addEventListener('click',()=>this.addUnitFromTemplate({code:'CUSTOM',name:'Custom Unit',color:'foundational',tags:['CUSTOM']}, 1, 'core'));
-        
+        document.getElementById('toggleView')?.addEventListener('click',()=>{ if(this.isStudentView) window.location.href=window.location.pathname; else this.sharePlan(); });
+        document.getElementById('sharePlan')?.addEventListener('click',()=>this.sharePlan());
+        document.getElementById('closeSharePanel')?.addEventListener('click',()=>document.getElementById('sharePanel').classList.remove('show'));
+        document.getElementById('copyShareLink')?.addEventListener('click',()=>{ const inp=document.getElementById('shareLink'); inp.select(); navigator.clipboard.writeText(inp.value); this.showToast('Copied!','success'); });
+        document.getElementById('savePlan')?.addEventListener('click',()=>this.savePlan());
+        document.getElementById('resetPlan')?.addEventListener('click',()=>this.resetToDefault());
+        document.getElementById('clearTimetable')?.addEventListener('click',()=>this.clearTimetable());
+        document.getElementById('printPlan')?.addEventListener('click',()=>this.printFullSchedule());
+        document.getElementById('exportPlan')?.addEventListener('click',()=>this.exportPlan());
+        document.getElementById('exportList')?.addEventListener('click',()=>this.exportAsList());
+        document.getElementById('applyBlocking')?.addEventListener('click',()=>this.applyWeekBlocking());
+        document.getElementById('addAssessmentUnit')?.addEventListener('click',()=>this.addAssessmentUnit());
+        document.getElementById('viewMode')?.addEventListener('change',e=>{ this.currentView = e.target.value; this.renderTimeline(); });
+        document.getElementById('highlightMode')?.addEventListener('change',e=>{ if(e.target.value!=='none') this.applyHighlighting(e.target.value); });
+        // FIXED: Import button - now works!
+        document.getElementById('importPlanBtn')?.addEventListener('click',()=>this.importPlanFromFile());
+        document.getElementById('addCustomUnit')?.addEventListener('click',()=>this.addUnitFromTemplate({code:'CUSTOM',name:'Custom Unit',color:'foundational',tags:['CUSTOM']}, 1, 'core'));
         document.querySelectorAll('.close-modal').forEach(btn=>btn.addEventListener('click',function(){ this.closest('.modal').style.display='none'; }));
         document.querySelectorAll('.modal').forEach(m=>{ m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; }); });
     }
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
-        if (m === '&') return '&amp;';
-        if (m === '<') return '&lt;';
-        if (m === '>') return '&gt;';
-        return m;
-    }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
-        return c;
-    });
+    
+    applyHighlighting(mode) {
+        document.querySelectorAll('.unit-block').forEach(b => b.style.boxShadow = '');
+        if (mode === 'none') return;
+        let ids = [];
+        if (mode === 'assessment') ids = this.units.filter(u => u.assessmentDue).map(u=>u.id);
+        else if (mode === 'specialist') ids = this.units.filter(u => u.tags?.includes('SPECIALIST')).map(u=>u.id);
+        else if (mode === 'safety') ids = this.units.filter(u => u.tags?.includes('SAFETY')).map(u=>u.id);
+        else if (mode === 'seasonal') ids = this.units.filter(u => u.tags?.includes('SEASONAL')).map(u=>u.id);
+        document.querySelectorAll('.unit-block').forEach(b => { if(ids.includes(b.dataset.unitId)) b.style.boxShadow = '0 0 0 3px gold'; });
+    }
 }
 
 let app;
 document.addEventListener('DOMContentLoaded',()=>{ app = new CoursePlanner(); window.app = app; });
+</script>
