@@ -1,102 +1,174 @@
-I see the issue! You have duplicate code at the end of your script. There's a stray }, 100); and duplicate debug button code. Here's the fixed initialization section. Replace everything from // ========== INITIALIZE APP ========== to the end with this:
+The issue is that the rendering is happening before the DOM is fully ready. Let me fix the init() method in the CoursePlanner class. Find the init() method and replace it with this:
 
 ```javascript
-// ========== INITIALIZE APP ==========
-let app;
-
-// Create a safe initialization function
-function initializeApp() {
+init() {
+    console.log('Initializing CoursePlanner...');
+    
     try {
-        console.log('Initializing application...');
+        // Load data first
+        this.loadInitialData();
         
-        // Create app instance
-        app = new CoursePlanner();
-        window.app = app;
+        // Set up event listeners
+        this.setupEventListeners();
         
-        // Add message listener for testing
-        window.addEventListener('message', (event) => {
-            if (event.data && event.data.type === 'test_data_load' && event.data.source === 'editor') {
-                console.log('=== STUDENT VIEW TEST ===');
-                console.log('Editor sent:', event.data.units, 'units,', event.data.weeks, 'weeks,', event.data.tiles, 'tiles');
-                console.log('Student has:', app.units.length, 'units,', app.courseData.totalWeeks, 'weeks,', app.customTiles.length, 'tiles');
-                
-                if (event.data.units === app.units.length && event.data.weeks === app.courseData.totalWeeks) {
-                    alert('✓ Test passed! Data is synchronized correctly.');
-                } else {
-                    alert('⚠ Test failed! Data mismatch. Check console for details.');
-                }
+        // Check if DOM is ready
+        const checkDOMAndRender = () => {
+            // Check if critical DOM elements exist
+            const timelineContainer = document.getElementById('timelineContent');
+            const unitPalette = document.getElementById('unitPalette');
+            
+            if (timelineContainer && unitPalette) {
+                console.log('DOM ready, rendering...');
+                this.renderEverything();
+                this.setupStudentViewIfNeeded();
+                this.setupKeyboardShortcuts();
+                this.hideLoadingScreen();
+                return true;
+            } else {
+                console.log('Waiting for DOM elements...');
+                return false;
             }
-        });
+        };
         
-        // Add debug button for testing (only in editor view)
-        setTimeout(() => {
-            try {
-                if (app && !app.isStudentView) {
-                    // Check if debug button already exists
-                    if (!document.getElementById('debugSyncBtn')) {
-                        const debugBtn = document.createElement('button');
-                        debugBtn.id = 'debugSyncBtn';
-                        debugBtn.textContent = '🔍 Verify Sync';
-                        debugBtn.style.cssText = `
-                            position: fixed;
-                            bottom: 70px;
-                            right: 20px;
-                            padding: 10px 15px;
-                            background: #2d3436;
-                            color: white;
-                            border: none;
-                            border-radius: 5px;
-                            cursor: pointer;
-                            z-index: 1000;
-                            font-size: 14px;
-                            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-                        `;
-                        debugBtn.onclick = () => {
-                            console.log('=== DEBUG SYNC STATUS ===');
-                            const isSynced = app.verifyDataSync();
-                            alert(isSynced ? '✓ Data is synchronized!' : '✗ Data sync issue - check console');
-                        };
-                        document.body.appendChild(debugBtn);
+        // Try to render immediately
+        if (!checkDOMAndRender()) {
+            // If not ready, wait for DOMContentLoaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    checkDOMAndRender();
+                });
+            } else {
+                // If DOM is loaded but elements missing, wait a bit
+                setTimeout(() => {
+                    if (!checkDOMAndRender()) {
+                        console.error('Critical DOM elements missing after timeout');
+                        this.hideLoadingScreen();
+                        this.showToast('Error: Could not load page properly', 'error');
                     }
-                }
-            } catch (error) {
-                console.error('Error adding debug button:', error);
-            }
-        }, 500);
-        
-        console.log('Application initialized successfully');
-        
-    } catch (error) {
-        console.error('Fatal error during initialization:', error);
-        // Show error message to user
-        const loading = document.getElementById('loading');
-        if (loading) {
-            const loadingText = loading.querySelector('.loading-text');
-            if (loadingText) {
-                loadingText.textContent = 'Error loading application. Please refresh the page.';
-                loadingText.style.color = '#ff6b6b';
-            }
-            const spinner = loading.querySelector('.loading-spinner');
-            if (spinner) {
-                spinner.style.display = 'none';
+                }, 500);
             }
         }
+        
+    } catch (error) {
+        console.error('Fatal error in init:', error);
+        this.hideLoadingScreen();
+        this.showToast('Error loading application: ' + error.message, 'error');
     }
-}
-
-// Wait for DOM to be ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeApp);
-} else {
-    // DOM already loaded, initialize immediately
-    initializeApp();
 }
 ```
 
-The key issues that were causing the infinite loading were:
+Also, let's add a safety check in the renderEverything() method to ensure containers exist. Find the renderEverything() method and replace it with:
 
-1. Duplicate code - You had extra code after the initialization function that was causing syntax errors
-2. Missing closing braces - There was a stray }, 100); that was breaking the JavaScript
-3. Duplicate debug button creation - The debug button was being created twice
+```javascript
+renderEverything() {
+    console.log('renderEverything called');
+    
+    // Check if critical containers exist
+    const unitPaletteContainer = document.getElementById('unitPalette');
+    const timelineContainer = document.getElementById('timelineContent');
+    
+    if (!unitPaletteContainer) {
+        console.error('Unit palette container not found');
+        return;
+    }
+    
+    if (!timelineContainer) {
+        console.error('Timeline container not found');
+        return;
+    }
+    
+    this.renderUnitPalette();
+    this.renderTimeline();
+    this.renderSavedPlans();
+    this.updateTotalWeeksDisplay();
+    
+    if (this.isStudentView) {
+        this.renderStudentTermOverviews();
+    }
+    
+    console.log('renderEverything completed');
+}
+```
 
-Replace the initialization section with the code above, and the app should load properly. The loading screen will disappear once the app is fully initialized and rendered.
+And let's fix the renderUnitPalette method to ensure it's working:
+
+```javascript
+renderUnitPalette() {
+    if (this.isStudentView) return;
+    
+    const container = document.getElementById('unitPalette');
+    if (!container) {
+        console.warn('Unit palette container not found');
+        return;
+    }
+
+    console.log('Rendering unit palette with', this.unitTemplates.length, 'templates');
+    
+    container.innerHTML = this.unitTemplates.map(template => `
+        <div class="unit-item" draggable="true" data-template='${JSON.stringify(template)}'
+             style="border-left: 4px solid ${this.colorMap[template.color]};">
+            <div class="unit-code">${template.code}</div>
+            <div class="unit-name">${template.name}</div>
+            <div style="display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap;">
+                ${template.tags.map(tag => `
+                    <span style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #e9ecef; color: #495057;">
+                        ${tag}
+                    </span>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+
+    // Add drag event listeners
+    const unitItems = container.querySelectorAll('.unit-item');
+    unitItems.forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            const template = JSON.parse(e.currentTarget.dataset.template);
+            this.draggedFromPalette = true;
+            this.draggedUnit = template;
+            e.dataTransfer.setData('text/plain', JSON.stringify(template));
+            e.currentTarget.classList.add('dragging');
+        });
+
+        item.addEventListener('dragend', (e) => {
+            e.currentTarget.classList.remove('dragging');
+            this.draggedFromPalette = false;
+            this.draggedUnit = null;
+        });
+    });
+}
+```
+
+And finally, let's fix the renderTimeline method to ensure it's receiving the correct data. Add this at the beginning of the renderTimeline method:
+
+```javascript
+renderTimeline() {
+    const container = document.getElementById('timelineContent');
+    if (!container) {
+        console.warn('Timeline container not found');
+        return;
+    }
+
+    console.log('Rendering timeline with', this.courseData.totalWeeks, 'weeks');
+    
+    const { totalWeeks, terms } = this.courseData;
+    
+    if (!totalWeeks || totalWeeks <= 0) {
+        console.error('Invalid total weeks:', totalWeeks);
+        container.innerHTML = '<div style="padding: 20px; text-align: center;">Error: Invalid week configuration</div>';
+        return;
+    }
+    
+    const weekWidth = this.isStudentView ? 120 : 150;
+    
+    // Rest of your existing renderTimeline code...
+```
+
+These changes will:
+
+1. Add better logging to help debug
+2. Ensure DOM elements exist before rendering
+3. Add fallbacks if rendering fails
+4. Wait for DOM elements to be available before rendering
+
+The main issue was that the rendering was happening before the DOM was fully loaded and the container elements existed. These fixes will ensure the app waits for the DOM to be ready before trying to render.
